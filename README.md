@@ -1,5 +1,7 @@
 # JobRadar AI
 
+**Repozitář:** [github.com/parohac4/JobRadarAI](https://github.com/parohac4/JobRadarAI)
+
 [English README](./README.en.md)
 
 Automatizace hledání zaměstnání: sběr inzerátů, AI hodnocení vhodnosti, návrhy reakcí a evidence výběrových řízení. Projekt je open-source (MIT) a připravený jako portfolio ukázka.
