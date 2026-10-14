@@ -19,6 +19,7 @@ Kompletní návod (DNS, nasazení, přístupy, provoz):
 | [docs/02-DEPLOY-VPS.md](./docs/02-DEPLOY-VPS.md) | Apache + Docker na Debian VPS |
 | [docs/03-PRISTUPY-A-KONFIGURACE.md](./docs/03-PRISTUPY-A-KONFIGURACE.md) | **`.env`, přihlášení, změna hesla/e-mailu** |
 | [docs/04-PROVOZ-A-OBNOVA.md](./docs/04-PROVOZ-A-OBNOVA.md) | Docker příkazy, zálohy, TLS |
+| [docs/05-OBSAH-REPozITARE.md](./docs/05-OBSAH-REPozITARE.md) | Co je v gitu / co ne |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architektura a datový model |
 
 ## Problém

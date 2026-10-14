@@ -10,7 +10,7 @@ Na produkci běží **Apache** (TLS + reverse proxy) a **Docker** (PostgreSQL, F
 
 | URL | Obsah |
 |-----|--------|
-| `https://chcetejelena.cz/` | Jednoduchá úvodní HTML stránka |
+| `https://chcetejelena.cz/` | Osobní statický web (projekt **mimo** JobRadarAI – `chcetejelena-web` → `/var/www/chcetejelena`) |
 | `https://chcetejelena.cz/nastenka/` | JobRadar (React SPA) |
 | `https://chcetejelena.cz/nastenka/login` | Přihlášení |
 | `https://chcetejelena.cz/nastenka/api/v1/...` | REST API |

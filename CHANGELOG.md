@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 – Dokumentace repozitáře
+
+- `docs/05-OBSAH-REPozITARE.md` – co patří do gitu, osobní web mimo JobRadarAI
+- Upřesnění deploy dokumentace (kořen domény vs `/nastenka`)
+
 ## 0.1.1 – Dokumentace a produkce chcetejelena.cz
 
 - Dokumentace: DNS Cloudflare, Apache + Docker deploy, přístupy `.env`, provoz a zálohy
