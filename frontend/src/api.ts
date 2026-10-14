@@ -1,12 +1,32 @@
+import { withBase } from "./config";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "/api/v1";
+const TOKEN_KEY = "jobradar_token";
 
 export function getToken(): string | null {
-  return localStorage.getItem("jobradar_token");
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string | null) {
-  if (token) localStorage.setItem("jobradar_token", token);
-  else localStorage.removeItem("jobradar_token");
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+function detailMessage(body: unknown, fallback: string): string {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (typeof d?.msg === "string" ? d.msg : JSON.stringify(d)))
+      .join("; ");
+  }
+  return fallback;
 }
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -19,9 +39,14 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers["Content-Type"] = "application/json";
   }
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    setToken(null);
+    window.location.href = withBase("/login");
+    throw new ApiError("Přihlášení vypršelo", 401);
+  }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Chyba API");
+    const body = await res.json().catch(() => null);
+    throw new ApiError(detailMessage(body, `Chyba API (${res.status})`), res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -36,10 +61,17 @@ export async function login(email: string, password: string) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (!res.ok) throw new Error("Přihlášení se nezdařilo");
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(detailMessage(data, "Přihlášení se nezdařilo"), res.status);
+  }
   const data = await res.json();
   setToken(data.access_token);
   return data;
+}
+
+export function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 export const apiClient = {

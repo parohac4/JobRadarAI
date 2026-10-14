@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -21,31 +24,45 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install backend deps
-        run: pip install -r backend/requirements.txt
+        run: pip install -r requirements.txt
       - name: Unit tests
-        run: pytest backend/tests/test_dedup.py backend/tests/test_email_parse.py -q
+        run: pytest tests -q --ignore=tests/test_api.py
       - name: API integration tests
         env:
           DATABASE_URL: postgresql+asyncpg://jobradar:jobradar_secret@localhost:5432/jobradar
           SECRET_KEY: test-secret
           ADMIN_EMAIL: admin@test.local
           ADMIN_PASSWORD: testpass
-        run: pytest backend/tests/test_api.py -q
+        run: pytest tests/test_api.py -q
 
   frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - run: npm install
-        working-directory: frontend
       - run: npm run build
-        working-directory: frontend
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

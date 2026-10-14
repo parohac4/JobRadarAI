@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.models.profile import ProfessionalProfile
 from app.models.user import User
 
@@ -50,9 +50,10 @@ DEFAULT_PROFILE = {
 async def ensure_admin_user(db: AsyncSession) -> None:
     """Jeden tenant: účet v DB se synchronizuje s ADMIN_EMAIL / ADMIN_PASSWORD z .env."""
     settings = get_settings()
+    admin_email = settings.admin_email.strip().lower()
     total = await db.scalar(select(func.count()).select_from(User)) or 0
 
-    result = await db.execute(select(User).where(User.email == settings.admin_email))
+    result = await db.execute(select(User).where(User.email == admin_email))
     user = result.scalar_one_or_none()
 
     if user is None and total == 1:
@@ -61,7 +62,7 @@ async def ensure_admin_user(db: AsyncSession) -> None:
 
     if user is None:
         user = User(
-            email=settings.admin_email,
+            email=admin_email,
             hashed_password=hash_password(settings.admin_password),
         )
         db.add(user)
@@ -78,8 +79,9 @@ async def ensure_admin_user(db: AsyncSession) -> None:
             )
         )
     else:
-        user.email = settings.admin_email
-        user.hashed_password = hash_password(settings.admin_password)
+        user.email = admin_email
+        if not verify_password(settings.admin_password, user.hashed_password):
+            user.hashed_password = hash_password(settings.admin_password)
         user.is_active = True
         result = await db.execute(select(ProfessionalProfile).where(ProfessionalProfile.user_id == user.id))
         if not result.scalar_one_or_none():

@@ -1,21 +1,29 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../api";
+import { ApiError, login } from "../api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@localhost");
-  const [password, setPassword] = useState("change-me");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setBusy(true);
     try {
       await login(email, password);
       navigate("/");
-    } catch {
-      setError("Nepodařilo se přihlásit. Zkontrolujte údaje v .env (ADMIN_EMAIL / ADMIN_PASSWORD).");
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 429
+          ? err.message
+          : "Nepodařilo se přihlásit. Zkontrolujte e-mail a heslo (ADMIN_EMAIL / ADMIN_PASSWORD v .env).",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -26,14 +34,20 @@ export default function LoginPage() {
         <p className="muted">Přihlášení do vaší instance</p>
         <label>
           E-mail
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" required />
         </label>
         <label>
           Heslo
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            autoComplete="current-password"
+            required
+          />
         </label>
-        {error && <p className="error">{error}</p>}
-        <button className="btn" type="submit">Přihlásit se</button>
+        {error && <p className="error" role="alert">{error}</p>}
+        <button className="btn" type="submit" disabled={busy}>{busy ? "Přihlašuji…" : "Přihlásit se"}</button>
       </form>
     </div>
   );

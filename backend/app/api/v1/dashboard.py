@@ -6,10 +6,10 @@ from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.application import Application
 from app.models.enums import ApplicationStatus, JobAvailability
-from app.models.evaluation import AiEvaluation
 from app.models.job import JobListing
 from app.models.user import User
 from app.schemas.system import DashboardStats
+from app.services.jobs import latest_score_subquery
 
 router = APIRouter()
 
@@ -37,10 +37,11 @@ async def stats(user: User = Depends(get_current_user), db: AsyncSession = Depen
         .select_from(Application)
         .where(Application.user_id == user.id, Application.status == ApplicationStatus.recommended)
     )
+    scores = latest_score_subquery()
     avg = await db.scalar(
-        select(func.avg(AiEvaluation.score))
-        .select_from(AiEvaluation)
-        .join(JobListing, AiEvaluation.job_listing_id == JobListing.id)
+        select(func.avg(scores.c.latest_score))
+        .select_from(scores)
+        .join(JobListing, scores.c.job_listing_id == JobListing.id)
         .where(JobListing.user_id == user.id)
     )
     return DashboardStats(

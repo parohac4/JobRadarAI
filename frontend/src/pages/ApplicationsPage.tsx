@@ -1,24 +1,35 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiClient } from "../api";
+import { apiClient, errorText } from "../api";
 import { APPLICATION_STATUS_LABELS, type Application } from "../types";
 
 export default function ApplicationsPage() {
   const [apps, setApps] = useState<Application[]>([]);
+  const [error, setError] = useState("");
 
-  const reload = () => apiClient.get<Application[]>("/applications").then(setApps);
+  const reload = () =>
+    apiClient
+      .get<Application[]>("/applications")
+      .then(setApps)
+      .catch((err) => setError(errorText(err)));
   useEffect(() => {
     reload();
   }, []);
 
   async function changeStatus(app: Application, status: string) {
-    await apiClient.patch(`/applications/${app.id}/status`, { status, note: "" });
-    await reload();
+    setError("");
+    try {
+      await apiClient.patch(`/applications/${app.id}/status`, { status, note: "" });
+      await reload();
+    } catch (err) {
+      setError(errorText(err));
+    }
   }
 
   return (
     <div className="grid">
       <h1>Evidence výběrových řízení</h1>
+      {error && <p className="error" role="alert">{error}</p>}
       <section className="card">
         <table>
           <thead>
@@ -35,6 +46,7 @@ export default function ApplicationsPage() {
                 <td>{new Date(a.updated_at).toLocaleString("cs-CZ")}</td>
                 <td>
                   <select
+                    aria-label="Stav žádosti"
                     value={a.status}
                     onChange={(e) => changeStatus(a, e.target.value)}
                   >

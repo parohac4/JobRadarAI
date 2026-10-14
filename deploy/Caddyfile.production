@@ -21,6 +21,6 @@
 
 	# Kořen domény – žádný seznam souborů aplikace
 	handle / {
-		respond "Chcete je lena – přístup k nástroji je na vyhrazené adrese." 200
+		respond "Chcete Jelena? – přístup k nástroji je na vyhrazené adrese." 200
 	}
 }

@@ -55,6 +55,7 @@ sudo systemctl reload apache2
 ```bash
 curl -sS https://chcetejelena.cz/nastenka/api/v1/system/health
 # {"status":"ok","demo_mode":false}
+# HTTP 503 {"status":"db_error"} = backend běží, ale nedosáhne na PostgreSQL
 ```
 
 ---
@@ -76,20 +77,42 @@ Cloudflare: režim **Full (strict)** (origin má platný certifikát).
 
 ## Záloha PostgreSQL
 
+Zálohy ukládej **mimo repozitář** (např. `~/backups/`, práva 600) – dump obsahuje osobní data.
+
 ```bash
 cd /home/parohac4/skripty/JobRadar_AI
+mkdir -p ~/backups
 sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml exec -T db \
-  pg_dump -U jobradar jobradar > backup-jobradar-$(date +%F).sql
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > ~/backups/jobradar-$(date +%F-%H%M).sql.gz
+chmod 600 ~/backups/*.sql.gz
 ```
 
 Obnova (pozor, přepíše data):
 
 ```bash
-cat backup.sql | sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml exec -T db \
+gunzip -c ~/backups/jobradar-DATUM.sql.gz | sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml exec -T db \
   psql -U jobradar -d jobradar
 ```
 
 Docker volume: `deploy_jobradar_pg` (název může být `deploy_jobradar_pg` dle názvu projektu compose).
+
+---
+
+## Testy
+
+Integrační testy potřebují PostgreSQL – **nikdy je nespouštěj proti produkční DB** (vytvářejí data).
+Dočasná testovací databáze:
+
+```bash
+sudo docker run -d --name jr-test-pg -p 127.0.0.1:55432:5432 \
+  -e POSTGRES_USER=jobradar -e POSTGRES_PASSWORD=jobradar_secret -e POSTGRES_DB=jobradar postgres:16-alpine
+cd backend
+DATABASE_URL=postgresql+asyncpg://jobradar:jobradar_secret@127.0.0.1:55432/jobradar \
+  ADMIN_EMAIL=admin@test.local ADMIN_PASSWORD=testpass SECRET_KEY=test .venv/bin/pytest tests -q
+sudo docker rm -f jr-test-pg
+```
+
+Bez `DATABASE_URL` s PostgreSQL se integrační testy přeskočí a běží jen unit testy.
 
 ---
 
@@ -113,7 +136,11 @@ UI: [http://localhost:8080](http://localhost:8080) (Caddy v `docker-compose.yml`
 | **403** na kořeni domény | Špatný vhost / DocumentRoot | Zkontroluj `chcetejelena.conf` |
 | Přihlášení nefunguje, `.env` je „správně“ | DB má jiný e-mail než `.env` | `restart backend` (sync) + tabulka `users` |
 | API 502 na `/nastenka` | Backend/frontend neběží | `docker compose ps`, logy backendu |
-| Prázdné `POSTGRES_PASSWORD` ve compose | Zapomenuté `--env-file .env` | Vždy `--env-file .env` |
+| `POSTGRES_PASSWORD chybí` při `docker compose` | Zapomenuté `--env-file .env` | Vždy `--env-file .env` |
+| Backend nenastartuje, v logu `SECRET_KEY o délce alespoň 32 znaků` | Slabý `SECRET_KEY` při `APP_ENV=production` | `openssl rand -hex 32` → `.env`, restart |
+| Přihlášení hlásí „Příliš mnoho neúspěšných pokusů“ (429) | Limit 10 pokusů / 15 min | Počkat, nebo `restart backend` |
+| Import URL vrací 400 „interní adresa“ | Ochrana SSRF – URL míří na localhost/privátní síť | Použij veřejnou URL inzerátu |
+| `/nastenka/api/v1/docs` vrací 404 | Swagger je v produkci vypnutý | Dočasně `API_DOCS=true` v `.env` + restart |
 
 Apache logy:
 

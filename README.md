@@ -22,6 +22,7 @@ Kompletní návod (DNS, nasazení, přístupy, provoz):
 | [docs/03-PRISTUPY-A-KONFIGURACE.md](./docs/03-PRISTUPY-A-KONFIGURACE.md) | **`.env`, přihlášení, změna hesla/e-mailu** |
 | [docs/04-PROVOZ-A-OBNOVA.md](./docs/04-PROVOZ-A-OBNOVA.md) | Docker příkazy, zálohy, TLS |
 | [docs/05-OBSAH-REPozITARE.md](./docs/05-OBSAH-REPozITARE.md) | Co je v gitu / co ne |
+| [docs/06-CODE-REVIEW.md](./docs/06-CODE-REVIEW.md) | Code review 0.2.0 – nálezy, opravy, známá omezení |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architektura a datový model |
 
 ## Problém
@@ -33,10 +34,11 @@ Hledání práce na více portálech je časově náročné. JobRadar AI central
 - Dashboard se statistikami
 - Ruční přidání nabídky, import z URL, vložení těla e-mailového upozornění
 - Detekce duplicit napříč záznamy
-- AI hodnocení 0–100 + důvody, výhody, rizika (OpenAI volitelně, jinak mock)
+- AI hodnocení 0–100 + důvody, výhody, rizika (OpenAI volitelně, jinak transparentní heuristika „mock“)
 - Návrh motivačního textu (draft)
-- Evidence žádostí a změn stavu
-- Profesní profil s editovatelnými preferencemi
+- Evidence žádostí – stavy, historie a poznámky přímo v detailu nabídky
+- Profesní profil s editovatelnými lokalitami, rolemi, zkušenostmi a verzemi CV
+- Audit log (přihlášení, importy, hodnocení) v Nastavení
 - Světlý / tmavý režim UI
 - Demo režim s fiktivními daty
 
@@ -77,7 +79,8 @@ sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml up -d --
 DEMO_MODE=true
 ```
 
-Obnovení fiktivních dat: **Nastavení → Obnovit demo data** nebo `POST /api/v1/system/demo/reset`.
+Při prvním startu s prázdnou DB se fiktivní data naplní automaticky. Obnovení: **Nastavení → Obnovit demo data**
+nebo `POST /api/v1/system/demo/reset` (mimo demo režim vrací 403).
 
 ## Konfigurace AI
 
@@ -92,14 +95,20 @@ OPENAI_MODEL=gpt-4o-mini
 ```bash
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/pytest tests/test_dedup.py tests/test_email_parse.py -q
+.venv/bin/pytest tests -q   # unit testy; integrační se bez PostgreSQL přeskočí
 ```
+
+Integrační testy proti dočasné DB: [docs/04-PROVOZ-A-OBNOVA.md](./docs/04-PROVOZ-A-OBNOVA.md#testy).
 
 ## Bezpečnost a soukromí
 
 - Do gitu nepatří `.env`, CV, e-maily ani export DB.
 - Produkční hesla pouze na serveru v `.env`.
-- Panel není na `/admin`, ale na konfigurovatelné cestě (např. `/nastenka`).
+- Panel není na `/admin`, ale na konfigurovatelné cestě (např. `/nastenka`), s `noindex`.
+- Limit neúspěšných přihlášení, ochrana importu URL proti SSRF, oddělení textu inzerátu od instrukcí AI
+  (prompt injection), kontrola síly `SECRET_KEY` v produkci, backend v kontejneru bez roota.
+- CI skenuje celou historii gitu na uniklá tajemství (gitleaks).
+- Podrobnosti a známá omezení: [docs/06-CODE-REVIEW.md](./docs/06-CODE-REVIEW.md).
 
 ## Licence
 

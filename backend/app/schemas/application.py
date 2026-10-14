@@ -5,17 +5,21 @@ from pydantic import BaseModel, Field
 from app.models.enums import ApplicationStatus
 
 
-class ApplicationCreate(BaseModel):
-    job_listing_id: int
-
-
 class ApplicationStatusUpdate(BaseModel):
     status: ApplicationStatus
-    note: str = ""
+    note: str = Field("", max_length=2000)
 
 
 class ApplicationNoteCreate(BaseModel):
-    body: str = Field(min_length=1)
+    body: str = Field(min_length=1, max_length=10000)
+
+
+class ApplicationNoteOut(BaseModel):
+    id: int
+    body: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class ApplicationOut(BaseModel):

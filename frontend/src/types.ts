@@ -38,6 +38,30 @@ export type Application = {
   company?: string;
 };
 
+export type ApplicationHistory = {
+  id: number;
+  from_status: string | null;
+  to_status: string;
+  note: string;
+  created_at: string;
+};
+
+export type ApplicationNote = {
+  id: number;
+  body: string;
+  created_at: string;
+};
+
+export type GeneratedResponse = {
+  id: number;
+  job_listing_id: number;
+  response_type: string;
+  content: string;
+  recommended_cv_version: string;
+  provider: string;
+  created_at: string;
+};
+
 export type DashboardStats = {
   total_jobs: number;
   open_jobs: number;

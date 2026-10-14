@@ -6,12 +6,14 @@ from app.models.enums import JobAvailability, JobSource
 
 
 class JobListingCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+
     title: str = Field(min_length=1, max_length=500)
-    company: str = ""
-    location: str = ""
-    url: str = ""
-    raw_text: str = ""
-    requirements_text: str = ""
+    company: str = Field("", max_length=300)
+    location: str = Field("", max_length=300)
+    url: str = Field("", max_length=2000)
+    raw_text: str = Field("", max_length=50000)
+    requirements_text: str = Field("", max_length=20000)
     source: JobSource = JobSource.manual
 
 
@@ -20,8 +22,8 @@ class JobImportUrl(BaseModel):
 
 
 class JobImportEmail(BaseModel):
-    email_body: str = Field(min_length=20)
-    subject: str = ""
+    email_body: str = Field(min_length=20, max_length=50000)
+    subject: str = Field("", max_length=500)
 
 
 class JobListingOut(BaseModel):

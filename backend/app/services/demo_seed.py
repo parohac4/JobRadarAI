@@ -15,26 +15,29 @@ from app.services.ai import evaluate_job
 DEMO_JOBS = [
     JobListingCreate(
         title="Technik IT podpory L2",
-        company="HostMaster s.r.o.",
+        company="HostMaster s.r.o. (fiktivní)",
         location="České Budějovice / hybrid",
         url="https://example.com/jobs/hostmaster-l2",
-        raw_text="Hledáme technika L2 pro linuxové servery, DNS, webhosting, zákaznickou komunikaci.",
+        raw_text=(
+            "Hledáme technika L2. Požadujeme znalost Linux, DNS a webhosting. "
+            "Zákaznická podpora po telefonu i e-mailem. Znalost Apache/Nginx výhodou."
+        ),
         source=JobSource.manual,
     ),
     JobListingCreate(
         title="Specialista zákaznické podpory",
-        company="CloudServis a.s.",
+        company="CloudServis a.s. (fiktivní)",
         location="Remote (ČR)",
         url="https://example.com/jobs/cloudservis-support",
-        raw_text="Technická podpora hostingu, ticketing, komunikace s klienty, základy Linux.",
+        raw_text="Technická podpora hostingu, ticketing, komunikace s klienty. Základy Linux výhodou.",
         source=JobSource.manual,
     ),
     JobListingCreate(
         title="Správce linuxových serverů",
-        company="DataPark",
+        company="DataPark (fiktivní)",
         location="Praha",
         url="https://example.com/jobs/datapark-linux",
-        raw_text="Správa serverů, monitoring, incidenty. Maturita výhodou.",
+        raw_text="Správa serverů Linux, monitoring, řešení incidentů. Požadujeme maturitu.",
         source=JobSource.manual,
     ),
 ]
@@ -54,32 +57,24 @@ async def seed_demo_data(db: AsyncSession, user: User) -> dict:
     result = await db.execute(select(ProfessionalProfile).where(ProfessionalProfile.user_id == user.id))
     profile = result.scalar_one()
 
-    created = 0
     for data in DEMO_JOBS:
         job, _ = await job_service.create_job(db, user.id, data)
         ev = await evaluate_job(profile, title=job.title, location=job.location, raw_text=job.raw_text)
-        db.add(
-            AiEvaluation(
-                job_listing_id=job.id,
-                score=ev["score"],
-                summary=ev["summary"],
-                reasons=ev["reasons"],
-                required_skills=ev["required_skills"],
-                preferred_skills=ev["preferred_skills"],
-                pros=ev["pros"],
-                cons=ev["cons"],
-                risks=ev["risks"],
-                provider=ev.get("provider", "mock"),
-            )
-        )
-        db.add(
-            Application(
-                user_id=user.id,
-                job_listing_id=job.id,
-                status=ApplicationStatus.recommended if ev["score"] >= 60 else ApplicationStatus.new_offer,
-            )
-        )
-        created += 1
+        db.add(AiEvaluation(job_listing_id=job.id, **ev))
+        status = ApplicationStatus.recommended if ev["score"] >= 60 else ApplicationStatus.new_offer
+        app = Application(user_id=user.id, job_listing_id=job.id, status=status)
+        db.add(app)
+        await db.flush()
+        db.add(ApplicationHistory(application_id=app.id, from_status=None, to_status=status, note="Demo data"))
 
     await db.commit()
-    return {"jobs_created": created}
+    return {"jobs_created": len(DEMO_JOBS)}
+
+
+async def seed_demo_if_empty(db: AsyncSession) -> None:
+    user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
+    if not user:
+        return
+    has_jobs = (await db.execute(select(JobListing.id).where(JobListing.user_id == user.id).limit(1))).first()
+    if not has_jobs:
+        await seed_demo_data(db, user)

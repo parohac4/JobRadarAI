@@ -4,7 +4,7 @@
 
 - Zdrojový kód backendu (`backend/`) a frontendu (`frontend/`)
 - Docker Compose (vývoj + produkční varianty v `deploy/`, `docker-compose*.yml`)
-- Apache vzor pro proxy na `/nastenka` (`deploy/apache/chcetejelena.conf`)
+- Apache konfigurace pro proxy na `/nastenka` (`deploy/apache/` – shodná s živým serverem)
 - Dokumentace (`docs/`, `README.md`, `CHANGELOG.md`)
 - Šablona konfigurace [`.env.example`](../.env.example) **bez** skutečných hesel
 - CI workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
@@ -27,9 +27,9 @@ Statický web **https://chcetejelena.cz/** (CHCETE JELENA) je **samostatný repo
 - GitHub: [parohac4/chcetejelena-web](https://github.com/parohac4/chcetejelena-web)
 - Lokálně: `/home/parohac4/skripty/chcetejelena-web/`
 
-Na serveru se kopíruje do `/var/www/chcetejelena/`. JobRadar běží jen pod **`/nastenka/`**.
-
-Soubor `deploy/apache/index.html` v JobRadarAI je jen **jednoduchá ukázka** pro první test Apache; produkční úvodní stránku spravuje projekt `chcetejelena-web`.
+Na serveru se nasazuje skriptem `deploy.sh` do `/var/www/chcetejelena/` (bez `.git`, README a LICENSE).
+JobRadar běží jen pod **`/nastenka/`**. Dřívější ukázkový `deploy/apache/index.html` byl odstraněn,
+aby omylem nepřepsal osobní web.
 
 ## Kontrola před `git push`
 
@@ -42,4 +42,5 @@ git ls-files | grep -E '^\.env$' && echo 'CHYBA: .env v gitu!' || echo 'OK'
 
 ## Historie commitů
 
-Smysluplné commity v češtině nebo angličtině; každý push na `main` spouští GitHub Actions (testy).
+Smysluplné commity v češtině nebo angličtině; každý push na `main` spouští GitHub Actions
+(testy backendu, build frontendu a sken tajemství [gitleaks](https://github.com/gitleaks/gitleaks) přes celou historii).

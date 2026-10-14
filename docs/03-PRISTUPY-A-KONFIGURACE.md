@@ -75,10 +75,14 @@ Očekávaná odpověď: JSON s `access_token`.
 | Proměnná | Účel |
 |----------|------|
 | `APP_ENV` | `production` na VPS, `development` lokálně |
-| `SECRET_KEY` | Podpis JWT (dlouhý náhodný řetězec) – změna odhlásí všechny session |
+| `SECRET_KEY` | Podpis JWT – na produkci **min. 32 znaků**, jinak backend nenastartuje (`openssl rand -hex 32`). Změna odhlásí všechny session |
 | `DEMO_MODE` | `false` na produkci; `true` = demo data, omezený zápis |
 | `ADMIN_EMAIL` | Přihlašovací e-mail |
-| `ADMIN_PASSWORD` | Přihlašovací heslo |
+| `ADMIN_PASSWORD` | Přihlašovací heslo (na produkci doporučeno 12+ znaků, jinak varování v logu) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Platnost přihlášení, výchozí 1440 (24 h) |
+| `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_SECONDS` | Limit neúspěšných přihlášení na e-mail i IP (výchozí 10 za 900 s → HTTP 429) |
+| `API_DOCS` | Swagger `/api/v1/docs`; výchozí zapnuto mimo produkci, v produkci vypnuto |
+| `ROOT_PATH` | Prefix API za proxy – nastavuje compose z `PUBLIC_PATH`, ručně ho neměň |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | PostgreSQL v Dockeru |
 | `DATABASE_URL` | Připojení backendu (v Docker compose se často přepisuje) |
 | `DOMAIN` | Veřejná doména (`chcetejelena.cz`) |
@@ -122,5 +126,9 @@ sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml up -d --
 
 - Silné unikátní `ADMIN_PASSWORD` a `POSTGRES_PASSWORD`.
 - `SECRET_KEY` alespoň 32 náhodných bajtů (hex/base64).
+- `.env` jen pro vlastníka: `chmod 600 .env`.
 - Soubor `.env.credentials-once` (pokud existuje) – jednorázová poznámka hesla při generování; po uložení do `.env` **smaž**.
+- Po 10 špatných pokusech se přihlášení na 15 minut zablokuje (pro daný e-mail i IP). Pokud se zablokuješ sám,
+  stačí počkat nebo restartovat backend (limit je v paměti procesu).
+- Neúspěšná i úspěšná přihlášení (s IP) jsou v audit logu: **Nastavení → Poslední aktivity**.
 - Pravidelné zálohy DB – viz [04-PROVOZ-A-OBNOVA.md](./04-PROVOZ-A-OBNOVA.md).

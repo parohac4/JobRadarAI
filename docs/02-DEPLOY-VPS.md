@@ -85,15 +85,35 @@ curl -sI http://127.0.0.1:8788/
 
 ## 4. Apache reverse proxy
 
+Konfigurace je rozdělená na tři soubory v `deploy/apache/`:
+
+| Soubor | Účel |
+|--------|------|
+| `chcetejelena-common.inc` | společná část: webroot osobního webu, bezpečnostní hlavičky, proxy `/nastenka/`, blokace `.git`/README, 404 |
+| `chcetejelena.conf` | `:80` – jen přesměrování na HTTPS |
+| `chcetejelena-le-ssl.conf` | `:443` – include + HSTS + certifikát (cesty od certbota) |
+
+Kořen domény (`/var/www/chcetejelena`) obsahuje **osobní web** z repozitáře
+[chcetejelena-web](https://github.com/parohac4/chcetejelena-web) – nasazuje se jeho skriptem `deploy.sh`,
+**ne** z JobRadaru.
+
 ```bash
 sudo mkdir -p /var/www/chcetejelena
-sudo cp deploy/apache/index.html /var/www/chcetejelena/
-sudo cp deploy/apache/chcetejelena.conf /etc/apache2/sites-available/chcetejelena.conf
 sudo a2enmod proxy proxy_http headers rewrite ssl
+sudo cp deploy/apache/chcetejelena-common.inc deploy/apache/chcetejelena.conf /etc/apache2/sites-available/
 sudo a2ensite chcetejelena.conf
-sudo apache2ctl configtest
-sudo systemctl reload apache2
+sudo apache2ctl configtest && sudo systemctl reload apache2
 ```
+
+Po vydání certifikátu (krok 5) zkopíruj i `chcetejelena-le-ssl.conf` (certbot ho při prvním běhu vytvoří sám;
+verze z repa ho nahradí stejným obsahem s include):
+
+```bash
+sudo cp deploy/apache/chcetejelena-le-ssl.conf /etc/apache2/sites-available/
+sudo apache2ctl configtest && sudo systemctl reload apache2
+```
+
+Při úpravách na živém serveru nejdřív zálohuj: `sudo cp -a /etc/apache2/sites-available/chcetejelena* /root/`.
 
 ---
 

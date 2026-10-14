@@ -19,6 +19,17 @@ class SyncRunOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AuditEventOut(BaseModel):
+    id: int
+    action: str
+    entity_type: str
+    entity_id: str
+    payload: dict
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class DashboardStats(BaseModel):
     total_jobs: int
     open_jobs: int
