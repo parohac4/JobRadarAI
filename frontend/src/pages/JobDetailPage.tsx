@@ -145,8 +145,8 @@ export default function JobDetailPage() {
   const latest = evaluations[0];
   const href = job?.url ? safeHref(job.url) : null;
   const snoozedActive =
-    job.inbox_status === "snoozed" && job.snoozed_until && new Date(job.snoozed_until) > new Date();
-  const isDismissed = job.inbox_status === "dismissed";
+    job?.inbox_status === "snoozed" && job?.snoozed_until && new Date(job.snoozed_until) > new Date();
+  const isDismissed = job?.inbox_status === "dismissed";
 
   function submitSnooze(e: FormEvent) {
     e.preventDefault();
