@@ -22,11 +22,10 @@
 
 ## Osobní web na kořeni domény
 
-Statický web **https://chcetejelena.cz/** (CHCETE JELENA) je **samostatný projekt** mimo tento repozitář:
+Statický web **https://chcetejelena.cz/** (CHCETE JELENA) je **samostatný repozitář**:
 
-```text
-/home/parohac4/skripty/chcetejelena-web/
-```
+- GitHub: [parohac4/chcetejelena-web](https://github.com/parohac4/chcetejelena-web)
+- Lokálně: `/home/parohac4/skripty/chcetejelena-web/`
 
 Na serveru se kopíruje do `/var/www/chcetejelena/`. JobRadar běží jen pod **`/nastenka/`**.
 
