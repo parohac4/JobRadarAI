@@ -9,9 +9,10 @@ from app.api.v1.router import api_router
 from app.config import get_settings
 from app.middleware.cloudflare import CloudflareOnlyMiddleware
 from app.database import AsyncSessionLocal, Base, engine
-from app.database_migrations import patch_applications_snooze, patch_job_listings_inbox
+from app.database_migrations import patch_applications_snooze, patch_job_listings_dedup, patch_job_listings_inbox
 from app.services.bootstrap import ensure_admin_user
 from app.services.default_feeds import ensure_default_feeds
+from app.services.dedup_backfill import backfill_title_company_hashes
 from app.services.demo_seed import seed_demo_if_empty
 from app.models.user import User
 
@@ -25,12 +26,14 @@ async def lifespan(_app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await patch_job_listings_inbox(conn)
+        await patch_job_listings_dedup(conn)
         await patch_applications_snooze(conn)
     async with AsyncSessionLocal() as session:
         await ensure_admin_user(session)
         user = (await session.execute(select(User).limit(1))).scalar_one_or_none()
         if user:
             await ensure_default_feeds(session, user)
+            await backfill_title_company_hashes(session)
         if get_settings().demo_mode:
             await seed_demo_if_empty(session)
     yield

@@ -15,6 +15,7 @@
 - Odložení žádosti se poznámkou (Evidence výběrových řízení + detail nabídky)
 - Nastavení: zapínání/vypínání jednotlivých RSS/API zdrojů (sloupec `enabled`)
 - Výchozí RSS Kariera.cz (ČR + Jihočeský + hardware), Aktuální nabídky práce, Práce pro OZP – doplnění při startu
+- Silnější deduplikace nabídek mezi zdroji (název+firma, podobný titul); duplicity se neukládají znovu a v seznamu jsou skryté
 - Dokumentace [docs/07-ETAPA2-PLAN.md](docs/07-ETAPA2-PLAN.md)
 
 ## 0.2.0 – Code review: bezpečnost, opravy, UI

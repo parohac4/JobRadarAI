@@ -70,6 +70,7 @@ async def list_jobs(
     max_km: int | None = Query(None, ge=1, le=500),
     include_remote: bool = Query(True),
     include_unknown: bool = Query(True),
+    include_duplicates: bool = Query(False),
     inbox: str = Query("active", pattern="^(active|snoozed|dismissed)$"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -99,6 +100,7 @@ async def list_jobs(
         max_km=effective_max,
         include_remote=include_remote,
         include_unknown=include_unknown,
+        include_duplicates=include_duplicates,
         inbox=inbox,
     )
 

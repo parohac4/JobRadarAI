@@ -17,12 +17,18 @@ router = APIRouter()
 @router.get("/stats", response_model=DashboardStats)
 async def stats(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     total = await db.scalar(
-        select(func.count()).select_from(JobListing).where(JobListing.user_id == user.id)
+        select(func.count())
+        .select_from(JobListing)
+        .where(JobListing.user_id == user.id, JobListing.duplicate_of_id.is_(None))
     )
     open_jobs = await db.scalar(
         select(func.count())
         .select_from(JobListing)
-        .where(JobListing.user_id == user.id, JobListing.availability == JobAvailability.open)
+        .where(
+            JobListing.user_id == user.id,
+            JobListing.availability == JobAvailability.open,
+            JobListing.duplicate_of_id.is_(None),
+        )
     )
     apps = await db.scalar(
         select(func.count())
@@ -42,7 +48,7 @@ async def stats(user: User = Depends(get_current_user), db: AsyncSession = Depen
         select(func.avg(scores.c.latest_score))
         .select_from(scores)
         .join(JobListing, scores.c.job_listing_id == JobListing.id)
-        .where(JobListing.user_id == user.id)
+        .where(JobListing.user_id == user.id, JobListing.duplicate_of_id.is_(None))
     )
     return DashboardStats(
         total_jobs=total or 0,

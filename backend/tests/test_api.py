@@ -56,7 +56,8 @@ async def test_full_job_flow(client: AsyncClient):
     assert job.json()["duplicate_of_id"] is None
 
     dup = await client.post("/api/v1/jobs", headers=auth, json=payload)
-    assert dup.json()["duplicate_of_id"] == job_id
+    assert dup.json()["id"] == job_id
+    assert dup.json()["duplicate_of_id"] is None
 
     ev = await client.post(f"/api/v1/jobs/{job_id}/evaluate", headers=auth)
     assert ev.status_code == 200, ev.text

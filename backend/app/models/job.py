@@ -22,6 +22,7 @@ class JobListing(Base):
     requirements_text: Mapped[str] = mapped_column(Text, default="")
 
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    title_company_hash: Mapped[str] = mapped_column(String(64), index=True, default="")
     url_hash: Mapped[str] = mapped_column(String(64), index=True, default="")
     duplicate_of_id: Mapped[int | None] = mapped_column(ForeignKey("job_listings.id"), nullable=True)
 

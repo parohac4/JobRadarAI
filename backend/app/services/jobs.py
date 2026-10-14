@@ -24,6 +24,8 @@ async def create_job(
         location=data.location,
         url=data.url,
     )
+    if dup:
+        return dup, dup
     job = JobListing(
         user_id=user_id,
         title=data.title,
@@ -34,8 +36,9 @@ async def create_job(
         raw_text=data.raw_text,
         requirements_text=data.requirements_text,
         content_hash=dedup.content_hash(data.title, data.company, data.location),
+        title_company_hash=dedup.title_company_hash(data.title, data.company),
         url_hash=dedup.url_hash(data.url) if data.url else "",
-        duplicate_of_id=dup.id if dup else None,
+        duplicate_of_id=None,
         availability=JobAvailability.open,
     )
     db.add(job)
@@ -155,6 +158,7 @@ async def list_jobs(
     max_km: int | None = None,
     include_remote: bool = True,
     include_unknown: bool = True,
+    include_duplicates: bool = False,
     inbox: str = "active",
 ) -> list[dict]:
     scores = latest_score_subquery()
@@ -163,6 +167,8 @@ async def list_jobs(
         .outerjoin(scores, JobListing.id == scores.c.job_listing_id)
         .where(JobListing.user_id == user_id, inbox_filter_clause(inbox))
     )
+    if not include_duplicates:
+        query = query.where(JobListing.duplicate_of_id.is_(None))
     if min_score is not None:
         query = query.where(scores.c.latest_score >= min_score)
 

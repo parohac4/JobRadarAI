@@ -1,4 +1,4 @@
-from app.services.dedup import content_hash, is_similar_title, normalize_url, url_hash
+from app.services.dedup import content_hash, is_similar_title, normalize_url, title_company_hash, url_hash
 
 
 def test_url_normalization():
@@ -15,6 +15,13 @@ def test_hashes_stable():
     h2 = content_hash("it   podpora", "firma", "české budějovice")
     assert h1 == h2
     assert url_hash("https://example.com/a") == url_hash("https://www.example.com/a/")
+
+
+def test_title_company_hash_ignores_location():
+    assert title_company_hash("IT technik", "ČZ a.s.") == title_company_hash(
+        "IT technik", "ČZ a.s."
+    )
+    assert title_company_hash("IT technik", "ČZ a.s.") != title_company_hash("IT technik", "Jiná firma")
 
 
 def test_similar_title_does_not_match_subset():
