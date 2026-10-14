@@ -8,6 +8,8 @@ Automatizace hledání zaměstnání: sběr inzerátů, AI hodnocení vhodnosti,
 
 **Produkční příklad:** [chcetejelena.cz/nastenka](https://chcetejelena.cz/nastenka/) (přihlášení pod `/nastenka/login`).
 
+Osobní web na kořeni domény: [github.com/parohac4/chcetejelena-web](https://github.com/parohac4/chcetejelena-web).
+
 ## Dokumentace
 
 Kompletní návod (DNS, nasazení, přístupy, provoz):

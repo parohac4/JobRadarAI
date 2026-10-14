@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 – Odkaz na osobní web
+
+- README odkazuje na repozitář `chcetejelena-web`
+
 ## 0.1.2 – Dokumentace repozitáře
 
 - `docs/05-OBSAH-REPozITARE.md` – co patří do gitu, osobní web mimo JobRadarAI
