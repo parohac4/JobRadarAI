@@ -2,7 +2,7 @@
 
 ## Přehled
 
-JobRadar AI je modulární monorepo: **FastAPI** (REST + OpenAPI), **PostgreSQL**, **React/TypeScript** SPA, **worker** pro plánované úlohy a **Caddy** jako reverzní proxy s HTTPS.
+JobRadar AI je modulární monorepo: **FastAPI** (REST + OpenAPI), **PostgreSQL**, **React/TypeScript** SPA, **worker** pro plánované úlohy. **Dev:** Caddy v Docker Compose. **Produkce (chcetejelena.cz):** Apache (Let's Encrypt) + reverse proxy na Docker – viz [02-DEPLOY-VPS.md](./02-DEPLOY-VPS.md).
 
 ```
                     ┌─────────────┐

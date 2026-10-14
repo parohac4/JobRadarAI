@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 – Dokumentace a produkce chcetejelena.cz
+
+- Dokumentace: DNS Cloudflare, Apache + Docker deploy, přístupy `.env`, provoz a zálohy
+- Produkční stack `deploy/docker-compose.apache.yml`, cesta `/nastenka`
+- Synchronizace `ADMIN_EMAIL` / `ADMIN_PASSWORD` s DB při startu backendu
+
 ## 0.1.0 – MVP (Etapa 1)
 
 - Docker Compose (PostgreSQL, FastAPI, React, Caddy)

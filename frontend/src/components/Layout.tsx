@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { apiClient, setToken } from "../api";
+import { withBase } from "../config";
 
 export default function Layout() {
   const [demoMode, setDemoMode] = useState(false);
@@ -40,7 +41,7 @@ export default function Layout() {
             className="btn secondary"
             onClick={() => {
               setToken(null);
-              window.location.href = "/login";
+              window.location.href = withBase("/login");
             }}
           >
             Odhlásit

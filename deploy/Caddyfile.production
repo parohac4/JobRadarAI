@@ -1,0 +1,26 @@
+{
+	email admin@chcetejelena.cz
+}
+
+{$DOMAIN} {
+	encode gzip
+
+	# API: /nastenka/api/v1/... -> backend /api/v1/...
+	@api path {$PUBLIC_PATH}/api/*
+	handle @api {
+		uri strip_prefix {$PUBLIC_PATH}
+		reverse_proxy backend:8000
+	}
+
+	# SPA pod /nastenka
+	@spa path {$PUBLIC_PATH}*
+	handle @spa {
+		uri strip_prefix {$PUBLIC_PATH}
+		reverse_proxy frontend:80
+	}
+
+	# Kořen domény – žádný seznam souborů aplikace
+	handle / {
+		respond "Chcete je lena – přístup k nástroji je na vyhrazené adrese." 200
+	}
+}

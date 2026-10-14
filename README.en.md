@@ -2,31 +2,28 @@
 
 Czech README: [README.md](./README.md)
 
-Job search automation with AI scoring, response drafts, and application tracking. Open-source MIT portfolio project.
+Job search automation with AI scoring and application tracking. MIT open source.
 
-## Quick start
+**Docs index:** [docs/README.md](./docs/README.md) (deployment, Cloudflare, `.env` / login – mostly in Czech).
+
+**Production example:** `https://chcetejelena.cz/nastenka/`
+
+## Local dev
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080) and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`.
+Login uses `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `.env`. On production, after changing `.env`, restart the backend container (see `docs/03-PRISTUPY-A-KONFIGURACE.md`).
 
-## Stack
-
-FastAPI, PostgreSQL, React + TypeScript, Caddy, optional OpenAI (mock provider by default).
-
-## Demo mode
-
-Set `DEMO_MODE=true` for read-only fictional data suitable for public demos without API keys.
-
-## Tests
+## Production (Apache + Docker)
 
 ```bash
-cd backend && pip install -r requirements.txt
-pytest tests/test_dedup.py tests/test_email_parse.py -q
+sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml up -d --build
 ```
+
+See [docs/02-DEPLOY-VPS.md](./docs/02-DEPLOY-VPS.md).
 
 ## License
 

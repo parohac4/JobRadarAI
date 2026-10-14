@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+.env.credentials-once
 .venv/
 __pycache__/
 *.py[cod]

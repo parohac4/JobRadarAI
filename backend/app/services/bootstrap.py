@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -48,10 +48,18 @@ DEFAULT_PROFILE = {
 
 
 async def ensure_admin_user(db: AsyncSession) -> None:
+    """Jeden tenant: účet v DB se synchronizuje s ADMIN_EMAIL / ADMIN_PASSWORD z .env."""
     settings = get_settings()
+    total = await db.scalar(select(func.count()).select_from(User)) or 0
+
     result = await db.execute(select(User).where(User.email == settings.admin_email))
     user = result.scalar_one_or_none()
-    if not user:
+
+    if user is None and total == 1:
+        result = await db.execute(select(User).limit(1))
+        user = result.scalar_one()
+
+    if user is None:
         user = User(
             email=settings.admin_email,
             hashed_password=hash_password(settings.admin_password),
@@ -70,6 +78,9 @@ async def ensure_admin_user(db: AsyncSession) -> None:
             )
         )
     else:
+        user.email = settings.admin_email
+        user.hashed_password = hash_password(settings.admin_password)
+        user.is_active = True
         result = await db.execute(select(ProfessionalProfile).where(ProfessionalProfile.user_id == user.id))
         if not result.scalar_one_or_none():
             db.add(
