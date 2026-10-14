@@ -118,6 +118,10 @@ export default function JobsPage() {
   return (
     <div className="grid">
       <h1>Pracovní nabídky</h1>
+      <p className="muted">
+        Import ze RSS/API:{" "}
+        <Link to="/sources"><strong>Zdroje RSS</strong></Link> – zapínání kanálů (Kariera.cz, Síť práce, …).
+      </p>
       {error && <p className="error" role="alert">{error}</p>}
 
       <section className="card grid">

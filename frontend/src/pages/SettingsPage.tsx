@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiClient, errorText } from "../api";
 
 type Health = { status: string; demo_mode: boolean };
@@ -14,8 +15,6 @@ type Integrations = {
   worker_enabled: boolean;
   sync_interval_seconds: number;
 };
-type Feed = { id: number; title: string; url: string; enabled: boolean; last_error: string };
-
 const ACTION_LABELS: Record<string, string> = {
   "auth.login": "Přihlášení",
   "auth.login_failed": "Neúspěšné přihlášení",
@@ -43,9 +42,6 @@ export default function SettingsPage() {
   const [integrations, setIntegrations] = useState<Integrations | null>(null);
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [feedUrl, setFeedUrl] = useState("");
-  const [feedTitle, setFeedTitle] = useState("");
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,7 +53,6 @@ export default function SettingsPage() {
     apiClient.get<Integrations>("/system/integrations").then(setIntegrations).catch(() => setIntegrations(null));
     reloadSync();
     apiClient.get<AuditEvent[]>("/system/audit").then(setAudit).catch((err) => setError(errorText(err)));
-    apiClient.get<Feed[]>("/feeds").then(setFeeds).catch(() => setFeeds([]));
   }, []);
 
   async function runSync(kind: "imap" | "rss") {
@@ -72,34 +67,6 @@ export default function SettingsPage() {
       setError(errorText(err));
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function setFeedEnabled(feed: Feed, enabled: boolean) {
-    setError("");
-    setBusy(true);
-    try {
-      const updated = await apiClient.patch<Feed>(`/feeds/${feed.id}`, { enabled });
-      setFeeds((list) => list.map((f) => (f.id === feed.id ? updated : f)));
-      setMsg(enabled ? "Zdroj zapnut – bude se synchronizovat." : "Zdroj vypnut – sync ho přeskočí.");
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addFeed(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    try {
-      await apiClient.post("/feeds", { title: feedTitle, url: feedUrl, enabled: true });
-      setFeedTitle("");
-      setFeedUrl("");
-      setFeeds(await apiClient.get<Feed[]>("/feeds"));
-      setMsg("RSS zdroj přidán.");
-    } catch (err) {
-      setError(errorText(err));
     }
   }
 
@@ -139,56 +106,13 @@ export default function SettingsPage() {
           <button className="btn secondary" type="button" disabled={busy || !integrations?.imap_configured} onClick={() => runSync("imap")}>
             Sync IMAP teď
           </button>
-          <button className="btn secondary" type="button" disabled={busy} onClick={() => runSync("rss")}>
-            Sync RSS teď
-          </button>
+          <Link className="btn secondary" to="/sources">Zdroje RSS – přehled a zapínání</Link>
         </div>
         {health?.demo_mode && (
           <button className="btn secondary" type="button" onClick={resetDemo}>Obnovit demo data</button>
         )}
         {msg && <p className="muted" role="status">{msg}</p>}
         {error && <p className="error" role="alert">{error}</p>}
-      </section>
-
-      <section className="card grid">
-        <h2>RSS a API zdroje nabídek</h2>
-        <p className="muted">
-          Vypnuté zdroje se při automatickém syncu (worker) i při tlačítku „Sync RSS teď“ nevolají.
-        </p>
-        <form className="grid" onSubmit={addFeed}>
-          <input placeholder="Název (volitelné)" value={feedTitle} onChange={(e) => setFeedTitle(e.target.value)} />
-          <input placeholder="https://…/feed.xml" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} required type="url" />
-          <button className="btn" type="submit" disabled={busy}>Přidat feed</button>
-        </form>
-        {feeds.length === 0 ? (
-          <p className="muted">Zatím žádné zdroje – přidejte RSS nebo JSON feed (např. Síť práce).</p>
-        ) : (
-          <table>
-            <thead>
-              <tr><th>Zap.</th><th>Název</th><th>URL</th><th>Chyba</th></tr>
-            </thead>
-            <tbody>
-              {feeds.map((f) => (
-                <tr key={f.id} className={f.enabled ? undefined : "muted"}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Zdroj ${f.title || f.url} zapnutý`}
-                      checked={f.enabled}
-                      disabled={busy}
-                      onChange={(e) => setFeedEnabled(f, e.target.checked)}
-                    />
-                  </td>
-                  <td>{f.title || "—"}</td>
-                  <td style={{ maxWidth: "280px", overflow: "hidden", textOverflow: "ellipsis" }} title={f.url}>
-                    {f.url}
-                  </td>
-                  <td className="error">{f.last_error || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </section>
 
       <section className="card">

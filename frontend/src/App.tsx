@@ -7,6 +7,7 @@ import JobsPage from "./pages/JobsPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
+import SourcesPage from "./pages/SourcesPage";
 import { getToken } from "./api";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="jobs" element={<JobsPage />} />
         <Route path="jobs/:id" element={<JobDetailPage />} />
+        <Route path="sources" element={<SourcesPage />} />
         <Route path="applications" element={<ApplicationsPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="settings" element={<SettingsPage />} />

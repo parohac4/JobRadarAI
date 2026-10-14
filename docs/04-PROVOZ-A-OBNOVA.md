@@ -54,6 +54,16 @@ sudo systemctl reload apache2
 
 ```bash
 curl -sS https://chcetejelena.cz/nastenka/api/v1/system/health
+
+Po změně frontendu/backendu vždy rebuild **bez cache**, jinak Docker může servírovat starý JS:
+
+```bash
+cd /path/to/JobRadar_AI
+sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml build --no-cache frontend backend worker
+sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml up -d
+```
+
+Ověření: v menu musí být **Zdroje RSS**; `curl -s http://127.0.0.1:8788/assets/index-*.js | grep -q 'Zdroje RSS' && echo OK`
 # {"status":"ok","demo_mode":false}
 # HTTP 503 {"status":"db_error"} = backend běží, ale nedosáhne na PostgreSQL
 ```

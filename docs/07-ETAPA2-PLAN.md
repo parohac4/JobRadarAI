@@ -36,14 +36,15 @@ zkuste druhou variantu v logu workeru).
 
 ## RSS a další zdroje
 
-Zdroje jsou v tabulce `feed_sources` (UI **Nastavení → RSS a API zdroje**). Každý zdroj lze **vypnout** přepínačem – vypnuté se při syncu přeskočí (`enabled=false`).
+Zdroje jsou v tabulce `feed_sources` (UI **Zdroje RSS** v menu, cesta `/sources`). Každý zdroj lze **vypnout** přepínačem – vypnuté se při syncu přeskočí (`enabled=false`). Při otevření stránky se doplní chybějící výchozí URL.
 
 | Zdroj | Jak to funguje v JobRadaru |
 |-------|----------------------------|
 | **Síť práce** ([sitprace.cz](https://sitprace.cz)) | Veřejné JSON API – výchozí vyhledávání pro IT podporu / Linux / Jih (automaticky při prvním startu) |
 | **Jobs.cz, Prace.cz** | Veřejné RSS **nemají** – použij **Gmail IMAP** (štítek JobRadar) na e-mailová upozornění |
 | **LinkedIn** | Bez RSS – ruční import / e-mail do IMAP |
-| Klasické **RSS URL** | Lze přidat ručně, pokud portál feed publikuje |
+| **Kariera.cz**, aktualninabidkyprace.cz, praceproozp.cz | Veřejné RSS – výchozí zdroje se doplní při startu backendu (`default_feeds.py`) |
+| Klasické **RSS URL** | Lze přidat ručně v Nastavení |
 
 Worker stahuje jen **veřejné** adresy (SSRF ochrana jako u importu z URL).
 

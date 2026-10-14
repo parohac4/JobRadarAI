@@ -14,6 +14,7 @@
 - Odložení a zamítnutí nabídky s povinnou poznámkou; záložky Aktivní / Odložené / Zamítnuté
 - Odložení žádosti se poznámkou (Evidence výběrových řízení + detail nabídky)
 - Nastavení: zapínání/vypínání jednotlivých RSS/API zdrojů (sloupec `enabled`)
+- Výchozí RSS Kariera.cz (ČR + Jihočeský + hardware), Aktuální nabídky práce, Práce pro OZP – doplnění při startu
 - Dokumentace [docs/07-ETAPA2-PLAN.md](docs/07-ETAPA2-PLAN.md)
 
 ## 0.2.0 – Code review: bezpečnost, opravy, UI

@@ -30,6 +30,7 @@ export default function Layout() {
         <nav className="nav">
           <NavLink to="/" end>Přehled</NavLink>
           <NavLink to="/jobs">Nabídky</NavLink>
+          <NavLink to="/sources">Zdroje RSS</NavLink>
           <NavLink to="/applications">Žádosti</NavLink>
           <NavLink to="/profile">Profil</NavLink>
           <NavLink to="/settings">Nastavení</NavLink>

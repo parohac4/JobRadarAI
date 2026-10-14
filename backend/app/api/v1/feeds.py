@@ -8,6 +8,7 @@ from app.models.feed_source import FeedSource
 from app.models.user import User
 from app.schemas.feed import FeedSourceCreate, FeedSourceOut, FeedSourceUpdate
 from app.services import audit
+from app.services.default_feeds import ensure_default_feeds
 from app.services.job_import import UnsafeUrlError, assert_public_url
 
 router = APIRouter()
@@ -15,10 +16,21 @@ router = APIRouter()
 
 @router.get("", response_model=list[FeedSourceOut])
 async def list_feeds(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await ensure_default_feeds(db, user)
     result = await db.execute(
-        select(FeedSource).where(FeedSource.user_id == user.id).order_by(FeedSource.id.desc())
+        select(FeedSource).where(FeedSource.user_id == user.id).order_by(FeedSource.enabled.desc(), FeedSource.id)
     )
     return list(result.scalars().all())
+
+
+@router.post("/ensure-defaults")
+async def ensure_defaults_feeds(
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    added = await ensure_default_feeds(db, user)
+    return {"added": added}
 
 
 @router.post("", response_model=FeedSourceOut)
