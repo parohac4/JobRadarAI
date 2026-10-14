@@ -38,6 +38,9 @@ class JobListingOut(BaseModel):
     duplicate_of_id: int | None
     imported_at: datetime
     latest_score: int | None = None
+    distance_km: float | None = None
+    location_remote: bool = False
+    location_unknown: bool = False
 
     model_config = {"from_attributes": True}
 

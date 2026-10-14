@@ -10,6 +10,9 @@ export type JobListing = {
   duplicate_of_id: number | null;
   imported_at: string;
   latest_score: number | null;
+  distance_km?: number | null;
+  location_remote?: boolean;
+  location_unknown?: boolean;
   requirements_text?: string;
   evaluations_count?: number;
 };

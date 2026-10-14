@@ -33,6 +33,20 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  worker:
+    build: ../backend
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jobradar}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-jobradar}
+      ROOT_PATH: ${PUBLIC_PATH:-/nastenka}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python -m app.worker
+    security_opt:
+      - no-new-privileges:true
+
   frontend:
     build:
       context: ../frontend

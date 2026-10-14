@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,9 +19,30 @@ login_limiter = FailureLimiter(_settings.login_max_failures, _settings.login_win
 _DUMMY_HASH = hash_password("timing-equalizer")
 
 
+def _set_auth_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
+    if not settings.auth_use_httponly_cookie:
+        return
+    response.set_cookie(
+        key=settings.auth_cookie_name,
+        value=token,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    settings = get_settings()
+    response.delete_cookie(key=settings.auth_cookie_name, path="/")
+
+
 @router.post("/login", response_model=Token)
 async def login(
     request: Request,
+    response: Response,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ) -> Token:
@@ -48,7 +69,17 @@ async def login(
     login_limiter.reset(*keys)
     await audit.log_audit(db, user_id=user.id, action="auth.login", payload={"ip": ip})
     await db.commit()
-    return Token(access_token=create_access_token(user.email))
+    token = create_access_token(user.email)
+    _set_auth_cookie(response, token)
+    settings = get_settings()
+    if settings.auth_use_httponly_cookie:
+        return Token(access_token="")
+    return Token(access_token=token)
+
+
+@router.post("/logout", status_code=204)
+async def logout(response: Response) -> None:
+    _clear_auth_cookie(response)
 
 
 @router.get("/me", response_model=UserOut)

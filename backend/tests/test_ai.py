@@ -1,6 +1,13 @@
 from types import SimpleNamespace
 
-from app.services.ai import _mock_evaluate, _template_letter, classify_skills, normalize_evaluation
+from app.services.ai import (
+    _mock_evaluate,
+    _profile_context,
+    _template_letter,
+    classify_skills,
+    enrich_experience_for_ai,
+    normalize_evaluation,
+)
 
 
 def _profile(**kw):
@@ -46,3 +53,20 @@ def test_template_letter_uses_only_profile_data():
     letter = _template_letter(_profile(summary="", skills=["Excel"]), "Asistent", "Firma")
     assert "Excel" in letter
     assert "Linux" not in letter
+
+
+def test_enrich_experience_adds_tenure_note_for_from_to():
+    enriched = enrich_experience_for_ai(
+        [{"role": "Podpora", "from": "2010", "to": "2020", "highlights": []}]
+    )
+    assert enriched[0]["_tenure_note"]
+    assert "2020" in enriched[0]["_tenure_note"]
+    assert "skončila" in enriched[0]["_tenure_note"]
+
+
+def test_profile_context_includes_tenure_notes():
+    ctx = _profile_context(
+        _profile(experience=[{"role": "Podpora", "from": "2010", "to": "2020"}])
+    )
+    assert "_tenure_note" in ctx
+    assert "2010" in ctx and "2020" in ctx

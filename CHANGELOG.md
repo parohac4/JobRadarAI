@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 – Automatizace a etapa 2
+
+- Worker (`python -m app.worker`) + služba v `deploy/docker-compose.apache.yml`
+- Gmail IMAP import job alertů, RSS zdroje v DB (`/feeds`), ruční sync v Nastavení
+- Výchozí feedy Síť práce (JSON API), import nabídek včetně lokality
+- Po importu volitelné auto-hodnocení a notifikace (e-mail / Telegram)
+- Import CV (PDF/DOCX) do profilu (`POST /profile/cv`)
+- HttpOnly cookie přihlášení, endpoint `/auth/logout`, volitelný `ENFORCE_CLOUDFLARE`
+- **Filtr a řazení nabídek podle vzdálenosti** od domovského města v profilu – [docs/08-LOKALITA-A-VZDALENOST.md](docs/08-LOKALITA-A-VZDALENOST.md)
+- AI: modely GPT-5 bez parametru `temperature`; průvodní dopis jako čistý text (ne JSON); hodnocení respektuje `from`/`to` u zkušeností
+- UI: klikatelné odkazy na originální inzerát, linkifikace URL v textu nabídky
+- Dokumentace [docs/07-ETAPA2-PLAN.md](docs/07-ETAPA2-PLAN.md)
+
 ## 0.2.0 – Code review: bezpečnost, opravy, UI
 
 Detail všech nálezů: [docs/06-CODE-REVIEW.md](docs/06-CODE-REVIEW.md).

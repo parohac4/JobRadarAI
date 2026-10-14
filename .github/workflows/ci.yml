@@ -42,6 +42,7 @@ jobs:
           SECRET_KEY: test-secret
           ADMIN_EMAIL: admin@test.local
           ADMIN_PASSWORD: testpass
+          AUTH_USE_HTTPONLY_COOKIE: false
         run: pytest tests/test_api.py -q
 
   frontend:

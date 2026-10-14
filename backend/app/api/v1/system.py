@@ -11,8 +11,11 @@ from app.database import get_db
 from app.models.audit import AuditEvent
 from app.models.sync import SyncRun
 from app.models.user import User
+from app.core.deps import require_write_access
+from app.schemas.feed import IntegrationsStatus
 from app.schemas.system import AuditEventOut, HealthOut, SyncRunOut
 from app.services.demo_seed import seed_demo_data
+from app.services.sync_orchestrator import run_imap_sync, run_rss_sync
 
 logger = logging.getLogger("jobradar.system")
 
@@ -47,6 +50,39 @@ async def audit_log(user: User = Depends(get_current_user), db: AsyncSession = D
         .limit(100)
     )
     return list(result.scalars().all())
+
+
+@router.get("/integrations", response_model=IntegrationsStatus)
+async def integrations_status(user: User = Depends(get_current_user)):
+    s = get_settings()
+    return IntegrationsStatus(
+        imap_configured=s.imap_configured,
+        imap_folder=s.imap_folder,
+        notify_enabled=s.notify_enabled,
+        notify_min_score=s.notify_min_score,
+        auto_evaluate_on_import=s.auto_evaluate_on_import,
+        ai_provider=s.ai_provider,
+        worker_enabled=s.worker_enabled,
+        sync_interval_seconds=s.sync_interval_seconds,
+    )
+
+
+@router.post("/sync/imap")
+async def sync_imap_manual(
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await run_imap_sync(db)
+
+
+@router.post("/sync/rss")
+async def sync_rss_manual(
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await run_rss_sync(db)
 
 
 @router.post("/demo/reset")

@@ -10,7 +10,8 @@ import SettingsPage from "./pages/SettingsPage";
 import { getToken } from "./api";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  if (!getToken()) return <Navigate to="/login" replace />;
+  const hasSession = getToken() || sessionStorage.getItem("jobradar_session") === "1";
+  if (!hasSession) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 

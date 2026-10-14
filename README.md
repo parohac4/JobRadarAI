@@ -24,12 +24,16 @@ Kompletní návod (DNS, nasazení, přístupy, provoz):
 | [docs/05-OBSAH-REPozITARE.md](./docs/05-OBSAH-REPozITARE.md) | Co je v gitu / co ne |
 | [docs/06-CODE-REVIEW.md](./docs/06-CODE-REVIEW.md) | Code review 0.2.0 – nálezy, opravy, známá omezení |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architektura a datový model |
+| [docs/07-ETAPA2-PLAN.md](./docs/07-ETAPA2-PLAN.md) | IMAP, RSS, worker, notifikace |
+| [docs/08-LOKALITA-A-VZDALENOST.md](./docs/08-LOKALITA-A-VZDALENOST.md) | Filtr nabídek podle vzdálenosti od města |
 
 ## Problém
 
 Hledání práce na více portálech je časově náročné. JobRadar AI centralizuje nabídky, porovnává je s vaším profilem, vysvětluje skóre a pomáhá připravit reakci – **bez automatického odesílání** bez vašeho souhlasu.
 
-## Funkce (MVP – Etapa 1)
+## Funkce
+
+### Etapa 1 (MVP)
 
 - Dashboard se statistikami
 - Ruční přidání nabídky, import z URL, vložení těla e-mailového upozornění
@@ -41,6 +45,13 @@ Hledání práce na více portálech je časově náročné. JobRadar AI central
 - Audit log (přihlášení, importy, hodnocení) v Nastavení
 - Světlý / tmavý režim UI
 - Demo režim s fiktivními daty
+
+### Etapa 0.3 (automatizace)
+
+- Worker: Gmail IMAP, RSS a Síť práce (JSON API), sync z Nastavení
+- Volitelné auto-hodnocení a notifikace (e-mail / Telegram) po importu
+- Import CV do profilu (PDF/DOCX)
+- Filtr a řazení nabídek podle vzdálenosti od domovského města (profil)
 
 ## Architektura
 

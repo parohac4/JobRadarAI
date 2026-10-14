@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiClient, errorText } from "../api";
+import LinkifiedText from "../components/LinkifiedText";
+import { safeHref } from "../utils/safeUrl";
 import {
   APPLICATION_STATUS_LABELS,
   type Application,
@@ -19,15 +21,6 @@ function List({ title, items }: { title: string; items: string[] }) {
       <ul>{items.map((r, i) => <li key={i}>{r}</li>)}</ul>
     </div>
   );
-}
-
-function safeHref(url: string): string | null {
-  try {
-    const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
-  } catch {
-    return null;
-  }
 }
 
 export default function JobDetailPage() {
@@ -67,7 +60,13 @@ export default function JobDetailPage() {
     setJob(j);
     setEvaluations(ev);
     setDrafts(rs);
-    setResponseText((current) => current || rs[0]?.content || "");
+    setResponseText((current) => {
+      const fromApi = rs[0]?.content || "";
+      if (!fromApi) return current;
+      // staré uložené návrhy někdy obsahovaly JSON z LLM; po opravě API vrací čistý text
+      if (!current || current.trimStart().startsWith("{")) return fromApi;
+      return current;
+    });
     await loadApplication();
   }, [jobId, loadApplication]);
 
@@ -241,9 +240,16 @@ export default function JobDetailPage() {
         </section>
       )}
 
-      <section className="card">
+      <section className="card grid">
         <h2>Text inzerátu</h2>
-        <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>{job.raw_text || "Bez textu"}</pre>
+        <div style={{ whiteSpace: "pre-wrap" }}>
+          {job.raw_text ? <LinkifiedText text={job.raw_text} /> : "Bez textu"}
+        </div>
+        {href && (
+          <p>
+            <a href={href} target="_blank" rel="noopener noreferrer">Originální nabídka</a>
+          </p>
+        )}
       </section>
     </div>
   );

@@ -8,8 +8,9 @@ from app.models.user import User
 
 DEFAULT_PROFILE = {
     "summary": (
-        "Dlouholeté zkušenosti s technickou podporou L1/L2, zákaznickou komunikací, "
-        "řešením problémů a praktickou správou linuxových serverů. Vyučení bez maturity."
+        "Zkušenosti s technickou podporou L1/L2, zákaznickou komunikací, "
+        "řešením problémů a praktickou správou linuxových serverů. Vyučení bez maturity. "
+        "(Upravte shrnutí a data zkušeností podle skutečnosti.)"
     ),
     "skills": [
         "Linux",
@@ -26,12 +27,16 @@ DEFAULT_PROFILE = {
     "experience": [
         {
             "role": "Technická podpora / správa serverů",
-            "years": "10+",
+            "from": "2010",
+            "to": "2020",
             "highlights": ["L1/L2 podpora", "Linux", "hosting"],
         }
     ],
     "education": [{"level": "Vyučení", "field": "IT / technické"}],
     "preferences": {
+        "home_city": "Strakonice",
+        "home": {"city": "Strakonice", "lat": 49.2614, "lon": 13.9024},
+        "max_distance_km": None,
         "regions": ["Jihočeský kraj", "remote", "home office", "hybrid"],
         "roles": [
             "IT podpora",

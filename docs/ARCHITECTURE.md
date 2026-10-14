@@ -34,6 +34,9 @@ JobRadar AI je modulární monorepo: **FastAPI** (REST + OpenAPI), **PostgreSQL*
 | `dedup` | Hash URL + fuzzy shoda titul/zaměstnavatel |
 | `profile` | Profesní profil, preference, verze CV (metadata) |
 | `ai` | Hodnocení 0–100, vysvětlení; `mock` bez API klíče |
+| `geo` | Města ČR (souřadnice), haversine, filtr/řazení nabídek podle vzdálenosti |
+| `feeds` / `rss_import` / `sitprace_import` / `imap_import` | Zdroje nabídek, synchronizace |
+| `worker` | Plánovaný sync IMAP a RSS |
 | `applications` | Stavy žádostí, historie, poznámky |
 | `responses` | Návrhy reakcí (MVP: generování textu) |
 | `email_import` | Parsování job alert e-mailů (IMAP volitelné) |
@@ -52,7 +55,12 @@ JobRadar AI je modulární monorepo: **FastAPI** (REST + OpenAPI), **PostgreSQL*
 - **application_notes** – poznámky uživatele
 - **generated_responses** – návrhy textů (draft)
 - **sync_runs** – log synchronizací / importů
+- **feed_sources** – RSS / JSON URL zdroje uživatele
+- **import_state** – např. poslední IMAP UID
+- **notification_sent** – odeslané upozornění na vysoké skóre
 - **audit_events**
+
+V `professional_profiles.preferences` mohou být `home_city`, `home` (lat/lon), `max_distance_km` – viz [08-LOKALITA-A-VZDALENOST.md](./08-LOKALITA-A-VZDALENOST.md).
 
 ## Bezpečnost
 

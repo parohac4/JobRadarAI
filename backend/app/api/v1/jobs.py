@@ -48,17 +48,48 @@ async def _store_job(db: AsyncSession, user: User, data: JobListingCreate, actio
     return await job_service.get_job_detail(db, user.id, job.id)
 
 
+async def _get_profile_optional(db: AsyncSession, user: User) -> ProfessionalProfile | None:
+    result = await db.execute(select(ProfessionalProfile).where(ProfessionalProfile.user_id == user.id))
+    return result.scalar_one_or_none()
+
+
 @router.get("", response_model=list[JobListingOut])
 async def list_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     min_score: int | None = Query(None, ge=0, le=100),
-    sort: str = Query("imported", pattern="^(imported|score)$"),
+    sort: str = Query("imported", pattern="^(imported|score|distance)$"),
+    max_km: int | None = Query(None, ge=1, le=500),
+    include_remote: bool = Query(True),
+    include_unknown: bool = Query(True),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    profile = await _get_profile_optional(db, user)
+    prefs = (profile.preferences or {}) if profile else {}
+    home = prefs.get("home") if isinstance(prefs.get("home"), dict) else None
+    effective_max = max_km if max_km is not None else prefs.get("max_distance_km")
+    if effective_max is not None:
+        try:
+            effective_max = int(effective_max)
+        except (TypeError, ValueError):
+            effective_max = None
+    if (sort == "distance" or effective_max is not None) and not home:
+        raise HTTPException(
+            status_code=400,
+            detail="Pro filtr nebo řazení podle vzdálenosti nastavte domovské město v profilu.",
+        )
     return await job_service.list_jobs(
-        db, user.id, skip=skip, limit=limit, min_score=min_score, by_score=sort == "score"
+        db,
+        user.id,
+        skip=skip,
+        limit=limit,
+        min_score=min_score,
+        sort=sort,
+        home=home,
+        max_km=effective_max,
+        include_remote=include_remote,
+        include_unknown=include_unknown,
     )
 
 

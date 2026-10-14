@@ -38,7 +38,7 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (options.body && !(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
   if (res.status === 401) {
     setToken(null);
     window.location.href = withBase("/login");
@@ -59,6 +59,7 @@ export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    credentials: "include",
     body,
   });
   if (!res.ok) {
@@ -66,8 +67,15 @@ export async function login(email: string, password: string) {
     throw new ApiError(detailMessage(data, "Přihlášení se nezdařilo"), res.status);
   }
   const data = await res.json();
-  setToken(data.access_token);
+  if (data.access_token) setToken(data.access_token);
+  else sessionStorage.setItem("jobradar_session", "1");
   return data;
+}
+
+export async function logout() {
+  await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
+  setToken(null);
+  sessionStorage.removeItem("jobradar_session");
 }
 
 export function errorText(err: unknown): string {
@@ -80,4 +88,5 @@ export const apiClient = {
     api<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  upload: <T>(path: string, form: FormData) => api<T>(path, { method: "POST", body: form }),
 };
