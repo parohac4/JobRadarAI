@@ -89,19 +89,23 @@ def _job_dict(
 
 
 def inbox_filter_clause(inbox: str):
+    """Filtr inboxu – porovnává stringy (sloupec VARCHAR z migrace)."""
     now = datetime.now(timezone.utc)
+    active = JobInboxStatus.active.value
+    snoozed = JobInboxStatus.snoozed.value
+    dismissed = JobInboxStatus.dismissed.value
     if inbox == "dismissed":
-        return JobListing.inbox_status == JobInboxStatus.dismissed
+        return JobListing.inbox_status == dismissed
     if inbox == "snoozed":
         return and_(
-            JobListing.inbox_status == JobInboxStatus.snoozed,
+            JobListing.inbox_status == snoozed,
             JobListing.snoozed_until.isnot(None),
             JobListing.snoozed_until > now,
         )
     return and_(
-        JobListing.inbox_status != JobInboxStatus.dismissed,
+        JobListing.inbox_status != dismissed,
         or_(
-            JobListing.inbox_status == JobInboxStatus.active,
+            JobListing.inbox_status == active,
             JobListing.snoozed_until.is_(None),
             JobListing.snoozed_until <= now,
         ),
