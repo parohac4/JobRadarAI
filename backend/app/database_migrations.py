@@ -10,6 +10,12 @@ async def patch_job_listings_dedup(conn: AsyncConnection) -> None:
             """
             ALTER TABLE job_listings
                 ADD COLUMN IF NOT EXISTS title_company_hash VARCHAR(64) NOT NULL DEFAULT '';
+            """
+        )
+    )
+    await conn.execute(
+        text(
+            """
             CREATE INDEX IF NOT EXISTS ix_job_listings_title_company_hash
                 ON job_listings (user_id, title_company_hash);
             """
