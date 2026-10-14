@@ -60,6 +60,17 @@ Odpověď `JobListingOut` obsahuje navíc:
 - Duplicitní nebo chybná lokalita v importu (např. jen kraj) může skončit jako `?`.
 - Filtrování probíhá v aplikaci (max. 500 záznamů na dotaz při aktivním filtru/řazení podle vzdálenosti).
 
+## Odložení a zamítnutí nabídky
+
+V **detailu nabídky** (sekce „Rozhodnutí o nabídce“):
+
+- **Odložit** – zvolíte 3/7/14/30 dní a **povinnou poznámku** (proč). Nabídka zmizí z záložky Aktivní do data `snoozed_until`, pak se znovu objeví.
+- **Zamítnout** – povinná poznámka; nabídka je v záložce **Zamítnuté**.
+- **Vrátit mezi aktivní** – zruší odložení nebo zamítnutí.
+
+API: `POST /jobs/{id}/snooze`, `POST /jobs/{id}/dismiss`, `POST /jobs/{id}/restore-inbox`.  
+Seznam: `GET /jobs?inbox=active|snoozed|dismissed` (výchozí `active`).
+
 ## Související
 
 - AI hodnocení stále používá textové preference regionů v profilu – filtr vzdálenosti je nezávislý doplněk pro seznam nabídek.

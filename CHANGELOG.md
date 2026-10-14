@@ -11,6 +11,7 @@
 - **Filtr a řazení nabídek podle vzdálenosti** od domovského města v profilu – [docs/08-LOKALITA-A-VZDALENOST.md](docs/08-LOKALITA-A-VZDALENOST.md)
 - AI: modely GPT-5 bez parametru `temperature`; průvodní dopis jako čistý text (ne JSON); hodnocení respektuje `from`/`to` u zkušeností
 - UI: klikatelné odkazy na originální inzerát, linkifikace URL v textu nabídky
+- Odložení a zamítnutí nabídky s povinnou poznámkou; záložky Aktivní / Odložené / Zamítnuté
 - Dokumentace [docs/07-ETAPA2-PLAN.md](docs/07-ETAPA2-PLAN.md)
 
 ## 0.2.0 – Code review: bezpečnost, opravy, UI

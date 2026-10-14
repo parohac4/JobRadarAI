@@ -4,7 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.enums import JobAvailability, JobSource
+from app.models.enums import JobAvailability, JobInboxStatus, JobSource
 
 
 class JobListing(Base):
@@ -26,6 +26,11 @@ class JobListing(Base):
     duplicate_of_id: Mapped[int | None] = mapped_column(ForeignKey("job_listings.id"), nullable=True)
 
     availability: Mapped[JobAvailability] = mapped_column(default=JobAvailability.unknown)
+    inbox_status: Mapped[JobInboxStatus] = mapped_column(default=JobInboxStatus.active)
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    snooze_note: Mapped[str] = mapped_column(Text, default="")
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_note: Mapped[str] = mapped_column(Text, default="")
     posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

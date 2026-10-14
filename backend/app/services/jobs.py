@@ -1,7 +1,9 @@
-from sqlalchemy import desc, func, select
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import JobAvailability
+from app.models.enums import JobAvailability, JobInboxStatus
 from app.models.evaluation import AiEvaluation
 from app.models.job import JobListing
 from app.schemas.job import JobListingCreate
@@ -78,7 +80,63 @@ def _job_dict(
         "distance_km": distance_km,
         "location_remote": location_remote,
         "location_unknown": location_unknown,
+        "inbox_status": job.inbox_status,
+        "snoozed_until": job.snoozed_until,
+        "snooze_note": job.snooze_note or "",
+        "dismissed_at": job.dismissed_at,
+        "dismissed_note": job.dismissed_note or "",
     }
+
+
+def inbox_filter_clause(inbox: str):
+    now = datetime.now(timezone.utc)
+    if inbox == "dismissed":
+        return JobListing.inbox_status == JobInboxStatus.dismissed
+    if inbox == "snoozed":
+        return and_(
+            JobListing.inbox_status == JobInboxStatus.snoozed,
+            JobListing.snoozed_until.isnot(None),
+            JobListing.snoozed_until > now,
+        )
+    return and_(
+        JobListing.inbox_status != JobInboxStatus.dismissed,
+        or_(
+            JobListing.inbox_status == JobInboxStatus.active,
+            JobListing.snoozed_until.is_(None),
+            JobListing.snoozed_until <= now,
+        ),
+    )
+
+
+async def snooze_job(db: AsyncSession, job: JobListing, *, note: str, days: int) -> JobListing:
+    until = datetime.now(timezone.utc) + timedelta(days=days)
+    job.inbox_status = JobInboxStatus.snoozed
+    job.snoozed_until = until
+    job.snooze_note = note.strip()
+    job.dismissed_at = None
+    job.dismissed_note = ""
+    await db.flush()
+    return job
+
+
+async def dismiss_job(db: AsyncSession, job: JobListing, *, note: str) -> JobListing:
+    job.inbox_status = JobInboxStatus.dismissed
+    job.dismissed_at = datetime.now(timezone.utc)
+    job.dismissed_note = note.strip()
+    job.snoozed_until = None
+    job.snooze_note = ""
+    await db.flush()
+    return job
+
+
+async def restore_job_inbox(db: AsyncSession, job: JobListing) -> JobListing:
+    job.inbox_status = JobInboxStatus.active
+    job.snoozed_until = None
+    job.snooze_note = ""
+    job.dismissed_at = None
+    job.dismissed_note = ""
+    await db.flush()
+    return job
 
 
 async def list_jobs(
@@ -93,12 +151,13 @@ async def list_jobs(
     max_km: int | None = None,
     include_remote: bool = True,
     include_unknown: bool = True,
+    inbox: str = "active",
 ) -> list[dict]:
     scores = latest_score_subquery()
     query = (
         select(JobListing, scores.c.latest_score)
         .outerjoin(scores, JobListing.id == scores.c.job_listing_id)
-        .where(JobListing.user_id == user_id)
+        .where(JobListing.user_id == user_id, inbox_filter_clause(inbox))
     )
     if min_score is not None:
         query = query.where(scores.c.latest_score >= min_score)

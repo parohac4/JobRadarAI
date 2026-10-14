@@ -5,6 +5,13 @@ import type { JobListing, Profile } from "../types";
 import { safeHref } from "../utils/safeUrl";
 
 type JobSort = "imported" | "score" | "distance";
+type InboxFilter = "active" | "snoozed" | "dismissed";
+
+const INBOX_LABELS: Record<InboxFilter, string> = {
+  active: "Aktivní",
+  snoozed: "Odložené",
+  dismissed: "Zamítnuté",
+};
 
 function formatDistance(j: JobListing): string {
   if (j.location_remote) return "remote";
@@ -30,9 +37,11 @@ export default function JobsPage() {
   const [sort, setSort] = useState<JobSort>("imported");
   const [includeRemote, setIncludeRemote] = useState(true);
   const [includeUnknown, setIncludeUnknown] = useState(true);
+  const [inbox, setInbox] = useState<InboxFilter>("active");
 
   const reload = useCallback(() => {
     const params = new URLSearchParams();
+    if (inbox !== "active") params.set("inbox", inbox);
     if (maxKm.trim()) params.set("max_km", maxKm.trim());
     if (sort !== "imported") params.set("sort", sort);
     if (!includeRemote) params.set("include_remote", "false");
@@ -42,7 +51,7 @@ export default function JobsPage() {
       .get<JobListing[]>(`/jobs${qs ? `?${qs}` : ""}`)
       .then(setJobs)
       .catch((err) => setError(errorText(err)));
-  }, [maxKm, sort, includeRemote, includeUnknown]);
+  }, [inbox, maxKm, sort, includeRemote, includeUnknown]);
 
   useEffect(() => {
     apiClient
@@ -110,6 +119,22 @@ export default function JobsPage() {
     <div className="grid">
       <h1>Pracovní nabídky</h1>
       {error && <p className="error" role="alert">{error}</p>}
+
+      <section className="card grid">
+        <h2>Seznam nabídek</h2>
+        <div className="row" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+          {(Object.keys(INBOX_LABELS) as InboxFilter[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={inbox === key ? "btn" : "btn secondary"}
+              onClick={() => setInbox(key)}
+            >
+              {INBOX_LABELS[key]}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="card grid">
         <h2>Filtr podle vzdálenosti</h2>
@@ -197,7 +222,9 @@ export default function JobsPage() {
                 <th>Pozice</th>
                 <th>Firma</th>
                 <th>Lokalita</th>
-                {hasHome && <th>Vzdálenost</th>}
+                {hasHome && inbox === "active" && <th>Vzdálenost</th>}
+                {(inbox === "snoozed" || inbox === "dismissed") && <th>Poznámka</th>}
+                {inbox === "snoozed" && <th>Do kdy</th>}
                 <th>Skóre</th>
                 <th>Inzerát</th>
                 <th>Duplicita</th>
@@ -211,7 +238,13 @@ export default function JobsPage() {
                     <td><Link to={`/jobs/${j.id}`}>{j.title}</Link></td>
                     <td>{j.company}</td>
                     <td>{j.location || "–"}</td>
-                    {hasHome && <td>{formatDistance(j)}</td>}
+                    {hasHome && inbox === "active" && <td>{formatDistance(j)}</td>}
+                    {(inbox === "snoozed" || inbox === "dismissed") && (
+                      <td>{inbox === "snoozed" ? j.snooze_note || "–" : j.dismissed_note || "–"}</td>
+                    )}
+                    {inbox === "snoozed" && (
+                      <td>{j.snoozed_until ? new Date(j.snoozed_until).toLocaleDateString("cs-CZ") : "–"}</td>
+                    )}
                     <td>{j.latest_score != null ? <span className="score-pill">{j.latest_score}</span> : "–"}</td>
                     <td>
                       {originalHref ? (

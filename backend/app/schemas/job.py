@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import JobAvailability, JobSource
+from app.models.enums import JobAvailability, JobInboxStatus, JobSource
 
 
 class JobListingCreate(BaseModel):
@@ -26,6 +26,15 @@ class JobImportEmail(BaseModel):
     subject: str = Field("", max_length=500)
 
 
+class JobSnoozeIn(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
+    days: int = Field(default=7, ge=1, le=365)
+
+
+class JobDismissIn(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
+
+
 class JobListingOut(BaseModel):
     id: int
     title: str
@@ -41,6 +50,11 @@ class JobListingOut(BaseModel):
     distance_km: float | None = None
     location_remote: bool = False
     location_unknown: bool = False
+    inbox_status: JobInboxStatus
+    snoozed_until: datetime | None = None
+    snooze_note: str = ""
+    dismissed_at: datetime | None = None
+    dismissed_note: str = ""
 
     model_config = {"from_attributes": True}
 

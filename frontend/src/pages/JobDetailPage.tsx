@@ -34,6 +34,9 @@ export default function JobDetailPage() {
   const [history, setHistory] = useState<ApplicationHistory[]>([]);
   const [notes, setNotes] = useState<ApplicationNote[]>([]);
   const [noteText, setNoteText] = useState("");
+  const [snoozeNote, setSnoozeNote] = useState("");
+  const [snoozeDays, setSnoozeDays] = useState(7);
+  const [dismissNote, setDismissNote] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -139,6 +142,33 @@ export default function JobDetailPage() {
 
   const latest = evaluations[0];
   const href = job?.url ? safeHref(job.url) : null;
+  const snoozedActive =
+    job.inbox_status === "snoozed" && job.snoozed_until && new Date(job.snoozed_until) > new Date();
+  const isDismissed = job.inbox_status === "dismissed";
+
+  function submitSnooze(e: FormEvent) {
+    e.preventDefault();
+    run(async () => {
+      await apiClient.post(`/jobs/${jobId}/snooze`, { note: snoozeNote.trim(), days: snoozeDays });
+      setSnoozeNote("");
+      await reload();
+    }, "Nabídka odložena.");
+  }
+
+  function submitDismiss(e: FormEvent) {
+    e.preventDefault();
+    run(async () => {
+      await apiClient.post(`/jobs/${jobId}/dismiss`, { note: dismissNote.trim() });
+      setDismissNote("");
+      await reload();
+    }, "Nabídka zamítnuta – najdete ji v záložce Zamítnuté.");
+  }
+
+  const restoreInbox = () =>
+    run(async () => {
+      await apiClient.post(`/jobs/${jobId}/restore-inbox`);
+      await reload();
+    }, "Nabídka je znovu mezi aktivními.");
 
   if (!job) {
     return error ? <p className="error" role="alert">{error}</p> : <p>Načítání…</p>;
@@ -165,6 +195,72 @@ export default function JobDetailPage() {
       {job.duplicate_of_id && (
         <p className="error">Možná duplicita k <Link to={`/jobs/${job.duplicate_of_id}`}>nabídce #{job.duplicate_of_id}</Link></p>
       )}
+
+      <section className="card grid">
+        <h2>Rozhodnutí o nabídce</h2>
+        {snoozedActive && (
+          <p className="muted">
+            Odloženo do {new Date(job.snoozed_until!).toLocaleString("cs-CZ")}
+            {job.snooze_note && <> – <em>{job.snooze_note}</em></>}
+          </p>
+        )}
+        {isDismissed && (
+          <p className="muted">
+            Zamítnuto {job.dismissed_at ? new Date(job.dismissed_at).toLocaleString("cs-CZ") : ""}
+            {job.dismissed_note && <> – <em>{job.dismissed_note}</em></>}
+          </p>
+        )}
+        {(snoozedActive || isDismissed) && (
+          <button className="btn secondary" type="button" onClick={restoreInbox} disabled={busy}>
+            Vrátit mezi aktivní
+          </button>
+        )}
+        {!isDismissed && (
+          <form className="grid" onSubmit={submitSnooze}>
+            <h3>Odložit</h3>
+            <label>
+              Délka
+              <select value={snoozeDays} onChange={(e) => setSnoozeDays(Number(e.target.value))} disabled={busy}>
+                <option value={3}>3 dny</option>
+                <option value={7}>7 dní</option>
+                <option value={14}>14 dní</option>
+                <option value={30}>30 dní</option>
+              </select>
+            </label>
+            <label>
+              Proč odložit? (povinné)
+              <textarea
+                rows={2}
+                value={snoozeNote}
+                onChange={(e) => setSnoozeNote(e.target.value)}
+                placeholder="např. čekám na výsledek jiného pohovoru"
+                required
+                minLength={3}
+                disabled={busy}
+              />
+            </label>
+            <button className="btn secondary" type="submit" disabled={busy}>Odložit nabídku</button>
+          </form>
+        )}
+        {!isDismissed && (
+          <form className="grid" onSubmit={submitDismiss}>
+            <h3>Zamítnout</h3>
+            <label>
+              Proč ne? (povinné)
+              <textarea
+                rows={2}
+                value={dismissNote}
+                onChange={(e) => setDismissNote(e.target.value)}
+                placeholder="např. nízký plat, špatná lokalita"
+                required
+                minLength={3}
+                disabled={busy}
+              />
+            </label>
+            <button className="btn secondary" type="submit" disabled={busy}>Zamítnout nabídku</button>
+          </form>
+        )}
+      </section>
 
       {latest && (
         <section className="card grid">

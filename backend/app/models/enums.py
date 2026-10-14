@@ -15,6 +15,14 @@ class JobAvailability(str, enum.Enum):
     unknown = "unknown"
 
 
+class JobInboxStatus(str, enum.Enum):
+    """Uživatelský stav v seznamu nabídek (ne stav inzerátu u zaměstnavatele)."""
+
+    active = "active"
+    snoozed = "snoozed"
+    dismissed = "dismissed"
+
+
 class ApplicationStatus(str, enum.Enum):
     new_offer = "new_offer"
     recommended = "recommended"

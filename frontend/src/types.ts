@@ -13,6 +13,11 @@ export type JobListing = {
   distance_km?: number | null;
   location_remote?: boolean;
   location_unknown?: boolean;
+  inbox_status?: "active" | "snoozed" | "dismissed";
+  snoozed_until?: string | null;
+  snooze_note?: string;
+  dismissed_at?: string | null;
+  dismissed_note?: string;
   requirements_text?: string;
   evaluations_count?: number;
 };

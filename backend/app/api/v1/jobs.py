@@ -13,7 +13,15 @@ from app.models.profile import ProfessionalProfile
 from app.models.response import GeneratedResponse
 from app.models.user import User
 from app.schemas.evaluation import EvaluationOut
-from app.schemas.job import JobImportEmail, JobImportUrl, JobListingCreate, JobListingDetail, JobListingOut
+from app.schemas.job import (
+    JobDismissIn,
+    JobImportEmail,
+    JobImportUrl,
+    JobListingCreate,
+    JobListingDetail,
+    JobListingOut,
+    JobSnoozeIn,
+)
 from app.schemas.response import GeneratedResponseOut
 from app.services import audit
 from app.services import jobs as job_service
@@ -62,6 +70,7 @@ async def list_jobs(
     max_km: int | None = Query(None, ge=1, le=500),
     include_remote: bool = Query(True),
     include_unknown: bool = Query(True),
+    inbox: str = Query("active", pattern="^(active|snoozed|dismissed)$"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -90,6 +99,7 @@ async def list_jobs(
         max_km=effective_max,
         include_remote=include_remote,
         include_unknown=include_unknown,
+        inbox=inbox,
     )
 
 
@@ -145,6 +155,60 @@ async def import_email(
 ):
     extracted = parse_job_email(body.subject, body.email_body)
     return await _store_job(db, user, JobListingCreate(**extracted), "job.import_email")
+
+
+@router.post("/{job_id}/snooze", response_model=JobListingOut)
+async def snooze_job(
+    job_id: int,
+    body: JobSnoozeIn,
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job = await _get_owned_job(db, user, job_id)
+    await job_service.snooze_job(db, job, note=body.note, days=body.days)
+    await audit.log_audit(
+        db,
+        user_id=user.id,
+        action="job.snooze",
+        entity_type="job",
+        entity_id=str(job.id),
+        payload={"days": body.days},
+    )
+    await db.commit()
+    detail = await job_service.get_job_detail(db, user.id, job.id)
+    return detail
+
+
+@router.post("/{job_id}/dismiss", response_model=JobListingOut)
+async def dismiss_job(
+    job_id: int,
+    body: JobDismissIn,
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job = await _get_owned_job(db, user, job_id)
+    await job_service.dismiss_job(db, job, note=body.note)
+    await audit.log_audit(db, user_id=user.id, action="job.dismiss", entity_type="job", entity_id=str(job.id))
+    await db.commit()
+    detail = await job_service.get_job_detail(db, user.id, job.id)
+    return detail
+
+
+@router.post("/{job_id}/restore-inbox", response_model=JobListingOut)
+async def restore_job_inbox(
+    job_id: int,
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job = await _get_owned_job(db, user, job_id)
+    await job_service.restore_job_inbox(db, job)
+    await audit.log_audit(db, user_id=user.id, action="job.restore_inbox", entity_type="job", entity_id=str(job.id))
+    await db.commit()
+    detail = await job_service.get_job_detail(db, user.id, job.id)
+    return detail
 
 
 @router.post("/{job_id}/evaluate", response_model=EvaluationOut)
