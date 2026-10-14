@@ -18,6 +18,7 @@ class Application(Base):
 
     status: Mapped[ApplicationStatus] = mapped_column(default=ApplicationStatus.new_offer)
     next_action_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    snooze_note: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

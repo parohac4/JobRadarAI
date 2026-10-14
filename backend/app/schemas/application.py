@@ -10,6 +10,11 @@ class ApplicationStatusUpdate(BaseModel):
     note: str = Field("", max_length=2000)
 
 
+class ApplicationSnoozeIn(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
+    days: int = Field(default=7, ge=1, le=365)
+
+
 class ApplicationNoteCreate(BaseModel):
     body: str = Field(min_length=1, max_length=10000)
 
@@ -27,6 +32,8 @@ class ApplicationOut(BaseModel):
     job_listing_id: int
     status: ApplicationStatus
     updated_at: datetime
+    next_action_at: datetime | None = None
+    snooze_note: str = ""
     job_title: str | None = None
     company: str | None = None
 

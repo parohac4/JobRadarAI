@@ -9,7 +9,7 @@ odesílání žádostí.
 | Fáze | Obsah | Stav |
 |------|--------|------|
 | 1 | Worker + `SyncRun`, ruční/spouštěný sync IMAP a RSS | **implementováno v 0.3.0** |
-| 2 | UI Nastavení – zdroje RSS, tlačítka sync, stav IMAP | částečně |
+| 2 | UI Nastavení – zdroje RSS (zap/vyp), tlačítka sync, stav IMAP | **implementováno** |
 | 3 | Po importu auto-hodnocení + notifikace (e-mail / Telegram) | **implementováno v 0.3.0** |
 | 4 | Import CV (PDF/DOCX) do profilu | **implementováno v 0.3.0** |
 | 5 | HttpOnly cookie + logout; volitelný lock přes Cloudflare | **implementováno v 0.3.0** |
@@ -36,7 +36,7 @@ zkuste druhou variantu v logu workeru).
 
 ## RSS a další zdroje
 
-Zdroje jsou v tabulce `feed_sources` (UI **Nastavení → RSS zdroje**).
+Zdroje jsou v tabulce `feed_sources` (UI **Nastavení → RSS a API zdroje**). Každý zdroj lze **vypnout** přepínačem – vypnuté se při syncu přeskočí (`enabled=false`).
 
 | Zdroj | Jak to funguje v JobRadaru |
 |-------|----------------------------|

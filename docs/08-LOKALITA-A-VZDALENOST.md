@@ -71,6 +71,14 @@ V **detailu nabídky** (sekce „Rozhodnutí o nabídce“):
 API: `POST /jobs/{id}/snooze`, `POST /jobs/{id}/dismiss`, `POST /jobs/{id}/restore-inbox`.  
 Seznam: `GET /jobs?inbox=active|snoozed|dismissed` (výchozí `active`).
 
+## Odložení žádosti
+
+Stejný princip jako u nabídky: **Evidence výběrových řízení** (záložky Aktivní / Odložené) nebo sekce v detailu nabídky u založené žádosti.
+
+- Povinná poznámka, délka 3/7/14/30 dní.
+- Termín je v poli `next_action_at`; po uplynutí se žádost znovu zobrazí mezi aktivními.
+- API: `POST /applications/{id}/snooze`, `POST /applications/{id}/restore-snooze`, seznam `GET /applications?inbox=active|snoozed`.
+
 ## Související
 
 - AI hodnocení stále používá textové preference regionů v profilu – filtr vzdálenosti je nezávislý doplněk pro seznam nabídek.

@@ -9,7 +9,7 @@ from app.api.v1.router import api_router
 from app.config import get_settings
 from app.middleware.cloudflare import CloudflareOnlyMiddleware
 from app.database import AsyncSessionLocal, Base, engine
-from app.database_migrations import patch_job_listings_inbox
+from app.database_migrations import patch_applications_snooze, patch_job_listings_inbox
 from app.services.bootstrap import ensure_admin_user
 from app.services.default_feeds import seed_default_feeds_if_empty
 from app.services.demo_seed import seed_demo_if_empty
@@ -25,6 +25,7 @@ async def lifespan(_app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await patch_job_listings_inbox(conn)
+        await patch_applications_snooze(conn)
     async with AsyncSessionLocal() as session:
         await ensure_admin_user(session)
         user = (await session.execute(select(User).limit(1))).scalar_one_or_none()

@@ -42,6 +42,8 @@ export type Application = {
   job_listing_id: number;
   status: string;
   updated_at: string;
+  next_action_at?: string | null;
+  snooze_note?: string;
   job_title?: string;
   company?: string;
 };

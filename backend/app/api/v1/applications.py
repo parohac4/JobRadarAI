@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,9 +12,11 @@ from app.schemas.application import (
     ApplicationNoteCreate,
     ApplicationNoteOut,
     ApplicationOut,
+    ApplicationSnoozeIn,
     ApplicationStatusUpdate,
 )
 from app.services import audit
+from app.services.applications import application_inbox_clause, clear_application_snooze, snooze_application
 
 router = APIRouter()
 
@@ -25,6 +27,8 @@ def _out(app: Application, job: JobListing) -> ApplicationOut:
         job_listing_id=app.job_listing_id,
         status=app.status,
         updated_at=app.updated_at,
+        next_action_at=app.next_action_at,
+        snooze_note=app.snooze_note or "",
         job_title=job.title,
         company=job.company,
     )
@@ -43,11 +47,15 @@ async def _get_owned(db: AsyncSession, user: User, app_id: int) -> tuple[Applica
 
 
 @router.get("", response_model=list[ApplicationOut])
-async def list_applications(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def list_applications(
+    inbox: str = Query("active", pattern="^(active|snoozed)$"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(
         select(Application, JobListing)
         .join(JobListing, Application.job_listing_id == JobListing.id)
-        .where(Application.user_id == user.id)
+        .where(Application.user_id == user.id, application_inbox_clause(inbox))
         .order_by(Application.updated_at.desc())
     )
     return [_out(app, job) for app, job in result.all()]
@@ -83,6 +91,63 @@ async def create_from_job(
     await db.flush()
     db.add(ApplicationHistory(application_id=app.id, from_status=None, to_status=app.status, note="Vytvořeno"))
     await audit.log_audit(db, user_id=user.id, action="application.create", entity_type="application", entity_id=str(app.id))
+    await db.commit()
+    await db.refresh(app)
+    return _out(app, job)
+
+
+@router.post("/{app_id}/snooze", response_model=ApplicationOut)
+async def snooze_application_endpoint(
+    app_id: int,
+    body: ApplicationSnoozeIn,
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    app, job = await _get_owned(db, user, app_id)
+    snooze_application(app, note=body.note, days=body.days)
+    until = app.next_action_at
+    db.add(
+        ApplicationHistory(
+            application_id=app.id,
+            from_status=app.status,
+            to_status=app.status,
+            note=f"Odloženo do {until.isoformat() if until else '?'}: {body.note.strip()}",
+        )
+    )
+    await audit.log_audit(
+        db,
+        user_id=user.id,
+        action="application.snooze",
+        entity_type="application",
+        entity_id=str(app.id),
+        payload={"days": body.days},
+    )
+    await db.commit()
+    await db.refresh(app)
+    return _out(app, job)
+
+
+@router.post("/{app_id}/restore-snooze", response_model=ApplicationOut)
+async def restore_application_snooze(
+    app_id: int,
+    _: None = Depends(require_write_access),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    app, job = await _get_owned(db, user, app_id)
+    clear_application_snooze(app)
+    db.add(
+        ApplicationHistory(
+            application_id=app.id,
+            from_status=app.status,
+            to_status=app.status,
+            note="Odložení zrušeno – žádost je znovu aktivní.",
+        )
+    )
+    await audit.log_audit(
+        db, user_id=user.id, action="application.restore_snooze", entity_type="application", entity_id=str(app.id)
+    )
     await db.commit()
     await db.refresh(app)
     return _out(app, job)

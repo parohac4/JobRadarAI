@@ -37,6 +37,8 @@ export default function JobDetailPage() {
   const [snoozeNote, setSnoozeNote] = useState("");
   const [snoozeDays, setSnoozeDays] = useState(7);
   const [dismissNote, setDismissNote] = useState("");
+  const [appSnoozeNote, setAppSnoozeNote] = useState("");
+  const [appSnoozeDays, setAppSnoozeDays] = useState(7);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -170,6 +172,29 @@ export default function JobDetailPage() {
       await reload();
     }, "Nabídka je znovu mezi aktivními.");
 
+  const appSnoozedActive =
+    application?.next_action_at && new Date(application.next_action_at) > new Date();
+
+  function submitAppSnooze(e: FormEvent) {
+    e.preventDefault();
+    if (!application) return;
+    run(async () => {
+      await apiClient.post(`/applications/${application.id}/snooze`, {
+        note: appSnoozeNote.trim(),
+        days: appSnoozeDays,
+      });
+      setAppSnoozeNote("");
+      await loadApplication();
+    }, "Žádost odložena – najdete ji v záložce Odložené.");
+  }
+
+  const restoreAppSnooze = () =>
+    run(async () => {
+      if (!application) return;
+      await apiClient.post(`/applications/${application.id}/restore-snooze`);
+      await loadApplication();
+    }, "Odložení žádosti zrušeno.");
+
   if (!job) {
     return error ? <p className="error" role="alert">{error}</p> : <p>Načítání…</p>;
   }
@@ -300,6 +325,43 @@ export default function JobDetailPage() {
       {application && (
         <section className="card grid">
           <h2>Evidence žádosti</h2>
+          {appSnoozedActive && (
+            <p className="muted">
+              Odloženo do {new Date(application.next_action_at!).toLocaleString("cs-CZ")}
+              {application.snooze_note && <> – <em>{application.snooze_note}</em></>}
+            </p>
+          )}
+          {appSnoozedActive ? (
+            <button className="btn secondary" type="button" onClick={restoreAppSnooze} disabled={busy}>
+              Zrušit odložení žádosti
+            </button>
+          ) : (
+            <form className="grid" onSubmit={submitAppSnooze}>
+              <h3>Odložit žádost</h3>
+              <label>
+                Délka
+                <select value={appSnoozeDays} onChange={(e) => setAppSnoozeDays(Number(e.target.value))} disabled={busy}>
+                  <option value={3}>3 dny</option>
+                  <option value={7}>7 dní</option>
+                  <option value={14}>14 dní</option>
+                  <option value={30}>30 dní</option>
+                </select>
+              </label>
+              <label>
+                Proč odložit? (povinné)
+                <textarea
+                  rows={2}
+                  value={appSnoozeNote}
+                  onChange={(e) => setAppSnoozeNote(e.target.value)}
+                  placeholder="např. čekám na odpověď jinde"
+                  required
+                  minLength={3}
+                  disabled={busy}
+                />
+              </label>
+              <button className="btn secondary" type="submit" disabled={busy}>Odložit žádost</button>
+            </form>
+          )}
           <label>
             Stav
             <select value={application.status} onChange={(e) => changeStatus(e.target.value)} disabled={busy}>

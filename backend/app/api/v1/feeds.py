@@ -60,6 +60,14 @@ async def update_feed(
             raise HTTPException(status_code=400, detail=str(e))
     for k, v in data.items():
         setattr(feed, k, v)
+    await audit.log_audit(
+        db,
+        user_id=user.id,
+        action="feed.update",
+        entity_type="feed",
+        entity_id=str(feed.id),
+        payload=data,
+    )
     await db.commit()
     await db.refresh(feed)
     return feed

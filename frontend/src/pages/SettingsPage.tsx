@@ -30,9 +30,12 @@ const ACTION_LABELS: Record<string, string> = {
   "application.create": "Žádost založena",
   "application.status": "Změna stavu žádosti",
   "application.note": "Poznámka k žádosti",
+  "application.snooze": "Žádost odložena",
+  "application.restore_snooze": "Odložení žádosti zrušeno",
   "profile.update": "Úprava profilu",
   "profile.cv_import": "Import CV",
   "feed.create": "RSS zdroj",
+  "feed.update": "Úprava RSS zdroje",
 };
 
 export default function SettingsPage() {
@@ -65,6 +68,20 @@ export default function SettingsPage() {
       const res = await apiClient.post<Record<string, unknown>>(`/system/sync/${kind}`);
       setMsg(`${kind.toUpperCase()} sync: ${JSON.stringify(res)}`);
       await reloadSync();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setFeedEnabled(feed: Feed, enabled: boolean) {
+    setError("");
+    setBusy(true);
+    try {
+      const updated = await apiClient.patch<Feed>(`/feeds/${feed.id}`, { enabled });
+      setFeeds((list) => list.map((f) => (f.id === feed.id ? updated : f)));
+      setMsg(enabled ? "Zdroj zapnut – bude se synchronizovat." : "Zdroj vypnut – sync ho přeskočí.");
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -134,23 +151,43 @@ export default function SettingsPage() {
       </section>
 
       <section className="card grid">
-        <h2>RSS zdroje</h2>
+        <h2>RSS a API zdroje nabídek</h2>
+        <p className="muted">
+          Vypnuté zdroje se při automatickém syncu (worker) i při tlačítku „Sync RSS teď“ nevolají.
+        </p>
         <form className="grid" onSubmit={addFeed}>
           <input placeholder="Název (volitelné)" value={feedTitle} onChange={(e) => setFeedTitle(e.target.value)} />
           <input placeholder="https://…/feed.xml" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} required type="url" />
-          <button className="btn" type="submit">Přidat feed</button>
+          <button className="btn" type="submit" disabled={busy}>Přidat feed</button>
         </form>
         {feeds.length === 0 ? (
-          <p className="muted">Zatím žádné RSS – přidejte veřejný feed (Jobs.cz / firemní kariérní stránky s RSS).</p>
+          <p className="muted">Zatím žádné zdroje – přidejte RSS nebo JSON feed (např. Síť práce).</p>
         ) : (
-          <ul>
-            {feeds.map((f) => (
-              <li key={f.id}>
-                <strong>{f.title || f.url}</strong>
-                {f.last_error && <span className="error"> – {f.last_error}</span>}
-              </li>
-            ))}
-          </ul>
+          <table>
+            <thead>
+              <tr><th>Zap.</th><th>Název</th><th>URL</th><th>Chyba</th></tr>
+            </thead>
+            <tbody>
+              {feeds.map((f) => (
+                <tr key={f.id} className={f.enabled ? undefined : "muted"}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={`Zdroj ${f.title || f.url} zapnutý`}
+                      checked={f.enabled}
+                      disabled={busy}
+                      onChange={(e) => setFeedEnabled(f, e.target.checked)}
+                    />
+                  </td>
+                  <td>{f.title || "—"}</td>
+                  <td style={{ maxWidth: "280px", overflow: "hidden", textOverflow: "ellipsis" }} title={f.url}>
+                    {f.url}
+                  </td>
+                  <td className="error">{f.last_error || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </section>
 
