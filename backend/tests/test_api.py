@@ -37,63 +37,35 @@ async def test_health(client: AsyncClient):
 
 
 async def test_requires_auth(client: AsyncClient):
-    assert (await client.get("/api/v1/jobs")).status_code == 401
+    assert (await client.get("/api/v1/aggregate/jobs")).status_code == 401
 
 
-async def test_full_job_flow(client: AsyncClient):
+async def test_saved_search_and_offers(client: AsyncClient):
     auth = await _token(client)
-    payload = {
-        "title": f"IT podpora {uuid.uuid4().hex[:8]}",
-        "company": "TestCo",
-        "location": "Remote",
-        "raw_text": "Požadujeme Linux a DNS. Technická podpora zákazníků.",
-        "source": "manual",
-    }
-
-    job = await client.post("/api/v1/jobs", headers=auth, json=payload)
-    assert job.status_code == 200, job.text
-    job_id = job.json()["id"]
-    assert job.json()["duplicate_of_id"] is None
-
-    dup = await client.post("/api/v1/jobs", headers=auth, json=payload)
-    assert dup.json()["id"] == job_id
-    assert dup.json()["duplicate_of_id"] is None
-
-    ev = await client.post(f"/api/v1/jobs/{job_id}/evaluate", headers=auth)
-    assert ev.status_code == 200, ev.text
-    assert 0 <= ev.json()["score"] <= 100
-    assert ev.json()["reasons"]
-
-    detail = await client.get(f"/api/v1/jobs/{job_id}", headers=auth)
-    assert detail.json()["latest_score"] == ev.json()["score"]
-
-    resp = await client.post(f"/api/v1/jobs/{job_id}/generate-response", headers=auth)
-    assert resp.status_code == 200
-    drafts = await client.get(f"/api/v1/jobs/{job_id}/responses", headers=auth)
-    assert drafts.json()[0]["content"] == resp.json()["content"]
-
-    app_row = await client.post(f"/api/v1/applications/from-job/{job_id}", headers=auth)
-    assert app_row.status_code == 200, app_row.text
-    app_id = app_row.json()["id"]
-    again = await client.post(f"/api/v1/applications/from-job/{job_id}", headers=auth)
-    assert again.status_code == 409
-
-    upd = await client.patch(
-        f"/api/v1/applications/{app_id}/status", headers=auth, json={"status": "sent", "note": "Odesláno"}
-    )
-    assert upd.json()["status"] == "sent"
-    hist = await client.get(f"/api/v1/applications/{app_id}/history", headers=auth)
-    assert [h["to_status"] for h in hist.json()] == ["sent", "new_offer"]
-
-    await client.post(f"/api/v1/applications/{app_id}/notes", headers=auth, json={"body": "Zavolat v pátek"})
-    notes = await client.get(f"/api/v1/applications/{app_id}/notes", headers=auth)
-    assert notes.json()[0]["body"] == "Zavolat v pátek"
+    original = (await client.get("/api/v1/aggregate/settings", headers=auth)).json()["settings"]
+    config = {**original, "city": "Strakonice", "radius_km": 30, "ai_enabled": False,
+              "sources": ["jobs", "prace", "sitprace"], "custom_feeds": []}
+    try:
+        response = await client.put("/api/v1/aggregate/settings", headers=auth, json=config)
+        assert response.status_code == 200, response.text
+        listing = await client.get("/api/v1/aggregate/jobs?sort=distance&limit=10", headers=auth)
+        assert listing.status_code == 200, listing.text
+        assert "items" in listing.json() and "total" in listing.json()
+        places = await client.get("/api/v1/aggregate/places?q=Volyn", headers=auth)
+        assert places.status_code == 200 and places.json()["items"]
+        assert (await client.post("/api/v1/applications/from-job/1", headers=auth)).status_code == 404
+        assert (await client.post("/api/v1/jobs/1/generate-response", headers=auth)).status_code == 404
+    finally:
+        restored = await client.put("/api/v1/aggregate/settings", headers=auth, json=original)
+        assert restored.status_code == 200
 
 
-async def test_import_url_blocks_internal_address(client: AsyncClient):
+async def test_custom_feed_blocks_internal_address(client: AsyncClient):
     auth = await _token(client)
-    resp = await client.post("/api/v1/jobs/import/url", headers=auth, json={"url": "http://127.0.0.1:8000/"})
-    assert resp.status_code == 400
+    config = (await client.get("/api/v1/aggregate/settings", headers=auth)).json()["settings"]
+    config["custom_feeds"] = [{"title": "Internal", "url": "http://127.0.0.1:8000/rss", "enabled": True}]
+    response = await client.put("/api/v1/aggregate/settings", headers=auth, json=config)
+    assert response.status_code == 400
 
 
 async def test_login_rate_limit(client: AsyncClient):

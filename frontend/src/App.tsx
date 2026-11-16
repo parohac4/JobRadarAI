@@ -1,13 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
-import ApplicationsPage from "./pages/ApplicationsPage";
-import DashboardPage from "./pages/DashboardPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import LoginPage from "./pages/LoginPage";
-import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
-import SourcesPage from "./pages/SourcesPage";
 import { getToken } from "./api";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -28,14 +24,15 @@ export default function App() {
           </PrivateRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route index element={<JobsPage />} />
         <Route path="jobs" element={<JobsPage />} />
         <Route path="jobs/:id" element={<JobDetailPage />} />
-        <Route path="sources" element={<SourcesPage />} />
-        <Route path="applications" element={<ApplicationsPage />} />
-        <Route path="profile" element={<ProfilePage />} />
+        <Route path="sources" element={<Navigate to="/settings" replace />} />
+        <Route path="applications" element={<Navigate to="/" replace />} />
+        <Route path="profile" element={<Navigate to="/settings" replace />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

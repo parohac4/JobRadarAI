@@ -1,159 +1,66 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { apiClient, errorText } from "../api";
-
-type Health = { status: string; demo_mode: boolean };
-type SyncRun = { id: number; source: string; status: string; message: string; started_at: string };
-type AuditEvent = { id: number; action: string; entity_type: string; entity_id: string; payload: Record<string, unknown>; created_at: string };
-type Integrations = {
-  imap_configured: boolean;
-  imap_folder: string;
-  notify_enabled: boolean;
-  notify_min_score: number;
-  auto_evaluate_on_import: boolean;
-  ai_provider: string;
-  worker_enabled: boolean;
-  sync_interval_seconds: number;
-};
-const ACTION_LABELS: Record<string, string> = {
-  "auth.login": "Přihlášení",
-  "auth.login_failed": "Neúspěšné přihlášení",
-  "job.create": "Nabídka přidána",
-  "job.import_url": "Import z URL",
-  "job.import_email": "Import z e-mailu",
-  "job.evaluate": "AI hodnocení",
-  "job.generate_response": "Návrh reakce",
-  "job.snooze": "Nabídka odložena",
-  "job.dismiss": "Nabídka zamítnuta",
-  "job.restore_inbox": "Nabídka vrácena do aktivních",
-  "application.create": "Žádost založena",
-  "application.status": "Změna stavu žádosti",
-  "application.note": "Poznámka k žádosti",
-  "application.snooze": "Žádost odložena",
-  "application.restore_snooze": "Odložení žádosti zrušeno",
-  "profile.update": "Úprava profilu",
-  "profile.cv_import": "Import CV",
-  "feed.create": "RSS zdroj",
-  "feed.update": "Úprava RSS zdroje",
-};
+import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { apiClient, errorText } from '../api';
+import type { MonitorStatus, SearchSettings, SettingsResponse } from '../aggregate';
 
 export default function SettingsPage() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [integrations, setIntegrations] = useState<Integrations | null>(null);
-  const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
-  const [audit, setAudit] = useState<AuditEvent[]>([]);
-  const [msg, setMsg] = useState("");
-  const [error, setError] = useState("");
+  const [data, setData] = useState<SettingsResponse | null>(null);
+  const [form, setForm] = useState<SearchSettings | null>(null);
+  const [places, setPlaces] = useState<{ label: string }[]>([]);
+  const [status, setStatus] = useState<MonitorStatus | null>(null);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const reloadSync = () => apiClient.get<SyncRun[]>("/system/sync-runs").then(setSyncRuns).catch(() => setSyncRuns([]));
-
+  const [feedTitle, setFeedTitle] = useState('');
+  const [feedUrl, setFeedUrl] = useState('');
   useEffect(() => {
-    apiClient.get<Health>("/system/health").then(setHealth).catch(() => setHealth({ status: "nedostupné", demo_mode: false }));
-    apiClient.get<Integrations>("/system/integrations").then(setIntegrations).catch(() => setIntegrations(null));
-    reloadSync();
-    apiClient.get<AuditEvent[]>("/system/audit").then(setAudit).catch((err) => setError(errorText(err)));
+    Promise.all([apiClient.get<SettingsResponse>('/aggregate/settings'), apiClient.get<MonitorStatus>('/aggregate/status')])
+      .then(([d, s]) => { setData(d); setForm(d.settings); setStatus(s); }).catch(e => setError(errorText(e)));
   }, []);
-
-  async function runSync(kind: "imap" | "rss") {
-    setBusy(true);
-    setMsg("");
-    setError("");
-    try {
-      const res = await apiClient.post<Record<string, unknown>>(`/system/sync/${kind}`);
-      setMsg(`${kind.toUpperCase()} sync: ${JSON.stringify(res)}`);
-      await reloadSync();
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
+  useEffect(() => {
+    if (!form?.city) { setPlaces([]); return; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      apiClient.get<{ items: { label: string }[] }>(`/aggregate/places?q=${encodeURIComponent(form.city)}`)
+        .then(d => { if (!controller.signal.aborted) setPlaces(d.items); }).catch(() => {});
+    }, 250);
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [form?.city]);
+  function update<K extends keyof SearchSettings>(key: K, value: SearchSettings[K]) {
+    setForm(old => old ? { ...old, [key]: value } : old); setMessage('');
   }
-
-  async function resetDemo() {
-    setMsg("");
-    setError("");
+  async function save(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
     try {
-      const res = await apiClient.post<{ ok: boolean; jobs_created?: number }>("/system/demo/reset");
-      setMsg(`Demo data obnovena (${res.jobs_created ?? 0} nabídek).`);
-    } catch (err) {
-      setError(errorText(err));
-    }
+      const d = await apiClient.put<{ settings: SearchSettings }>('/aggregate/settings', form);
+      setForm(d.settings); setMessage('Hledání uloženo. Spouštím sběr podle nového nastavení…');
+      try { await apiClient.post('/aggregate/sync'); }
+      catch (e) { setMessage('Hledání je uložené. Ruční sběr se nepodařilo spustit: ' + errorText(e)); }
+    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
-
-  return (
-    <div className="grid">
-      <h1>Nastavení a provoz</h1>
-      <section className="card grid">
-        <h2>Stav systému</h2>
-        <p>API: {health?.status ?? "…"} · Demo režim: {health?.demo_mode ? "ano" : "ne"}</p>
-        {integrations && (
-          <ul className="muted">
-            <li>IMAP: {integrations.imap_configured ? `aktivní (složka ${integrations.imap_folder})` : "nekonfigurováno v .env"}</li>
-            <li>Worker: {integrations.worker_enabled ? `ano, každých ${integrations.sync_interval_seconds} s` : "vypnutý"}</li>
-            <li>AI: {integrations.ai_provider} · auto-hodnocení po importu: {integrations.auto_evaluate_on_import ? "ano" : "ne"}</li>
-            <li>Notifikace: {integrations.notify_enabled ? `ano, od skóre ${integrations.notify_min_score}` : "ne"}</li>
-          </ul>
-        )}
-        <p className="muted">
-          Gmail IMAP, SMTP, Telegram a OpenAI nastavíte v <code>.env</code> – návod{" "}
-          <a href="https://github.com/parohac4/JobRadarAI/blob/main/docs/07-ETAPA2-PLAN.md" target="_blank" rel="noreferrer">
-            docs/07-ETAPA2-PLAN.md
-          </a>
-          .
-        </p>
-        <div className="row">
-          <button className="btn secondary" type="button" disabled={busy || !integrations?.imap_configured} onClick={() => runSync("imap")}>
-            Sync IMAP teď
-          </button>
-          <Link className="btn secondary" to="/sources">Zdroje RSS – přehled a zapínání</Link>
-        </div>
-        {health?.demo_mode && (
-          <button className="btn secondary" type="button" onClick={resetDemo}>Obnovit demo data</button>
-        )}
-        {msg && <p className="muted" role="status">{msg}</p>}
-        {error && <p className="error" role="alert">{error}</p>}
+  if (!form || !data) return <div><h1>Nastavení hledání</h1>{error ? <p role="alert" className="error">{error}</p> : <p>Načítám nastavení…</p>}</div>;
+  return <div className="grid settings-page"><header><p className="eyebrow">HLÍDAČ PRÁCE</p><h1>Nastavení hledání</h1><p className="muted">Kde hledat, co vás baví a které portály průběžně sledovat.</p></header>
+    {error && <p className="error" role="alert">{error}</p>}{message && <p className="info" role="status">{message} <Link className="text-link" to="/">Zobrazit nabídky →</Link></p>}
+    <form className="grid" onSubmit={save}>
+      <section className="card grid"><h2>1. Místo a okruh</h2><div className="settings-columns"><label>Obec / město<input list="places" autoComplete="off" required value={form.city} onChange={e => update('city', e.target.value)} placeholder="Začněte psát název obce…" /><datalist id="places">{places.map(p => <option key={p.label} value={p.label} />)}</datalist><small className="muted">Vyberte obec z našeptávače. Stejnojmenná sídla rozlišují souřadnice.</small></label>
+      <label>Okruh od obce (km)<input type="number" required min={1} max={500} value={form.radius_km} onChange={e => update('radius_km', Number(e.target.value))} /></label></div>
+      <label className="check-label"><input type="checkbox" checked={form.include_remote} onChange={e => update('include_remote', e.target.checked)} />Zahrnout práci na dálku a celostátní nabídky bez určené obce</label>
+      <label className="check-label"><input type="checkbox" checked={form.include_unknown} onChange={e => update('include_unknown', e.target.checked)} />Zahrnout i nabídky s neznámou lokalitou</label><small className="muted">Hybridní práce se filtruje podle místa dojíždění. Práce na dálku se zahrne, pokud ji zdroj ve výsledcích poskytne.</small></section>
+      <section className="card grid"><h2>2. Jakou práci hledat</h2><label>Pozice nebo klíčová slova<input value={form.keywords} maxLength={300} onChange={e => update('keywords', e.target.value)} placeholder="Např. technik, účetní, Linux…" /><small className="muted">Prázdné pole = všechny profese. Stačí shoda alespoň jednoho slova.</small></label>
+      <label className="check-label"><input type="checkbox" checked={form.ai_enabled} onChange={e => update('ai_enabled', e.target.checked)} />Hledat a řadit také podle AI preferencí</label>
+      {form.ai_enabled && <><label>Co by vás bavilo a čemu se chcete vyhnout<textarea rows={5} required maxLength={4000} value={form.ai_preferences} onChange={e => update('ai_preferences', e.target.value)} placeholder="Baví mě opravovat techniku, pomáhat lidem a hledat řešení. Hledám denní směny, nechci aktivní prodej ani noční provoz." /></label>
+        <p className="muted">AI posoudí načtené nabídky podle vašeho popisu a vysvětlí jejich vhodnost. Nové i dosud nevyhodnocené nabídky prochází postupně, maximálně {data.ai_daily_limit} hodnocení denně. Po změně přání se skóre přepočítá. AI dostane tento popis a text nabídky.</p>
+        {!data.ai_available && <p className="info">AI zatím není na serveru připojená. Preference můžete uložit; sběr funguje i bez AI, hodnocení bude dostupné po připojení.</p>}</>}
+      <div className="settings-columns"><label>Výchozí řazení<select value={form.sort} onChange={e => update('sort', e.target.value as SearchSettings['sort'])}><option value="newest">Nejnovější</option><option value="distance">Nejbližší</option><option value="match">Největší shoda s preferencemi</option></select></label><label>Minimální shoda (%)<input type="number" required min={0} max={100} value={form.min_score} onChange={e => update('min_score', Number(e.target.value))} /><small className="muted">0 = všechny. Vyšší limit skryje i dosud nevyhodnocené nabídky.</small></label></div></section>
+      <section className="card grid"><h2>3. Pracovní portály</h2><p className="muted">Vybrané zdroje hlídač načítá automaticky. Stejné nabídky slučuje.</p><div className="source-grid">{data.sources.map(s => {
+        const state = status?.last_run?.details.sources?.[s.id];
+        return <div className="source-card" key={s.id}><label className="check-label"><input type="checkbox" checked={form.sources.includes(s.id)} onChange={e => update('sources', e.target.checked ? [...form.sources, s.id] : form.sources.filter(x => x !== s.id))} /><strong>{s.name}</strong></label><p className="muted">{s.description}</p><a className="text-link" href={s.url} target="_blank" rel="noreferrer">Otevřít portál ↗</a>{state && <div className="source-state"><span className={state.status === 'ok' ? 'success' : 'error'}>{state.status === 'ok' ? `Načteno · ${state.found ?? 0} nabídek` : state.status === 'partial' ? 'Načteno částečně' : 'Načtení selhalo'}</span><small className="muted">{new Date(state.checked_at).toLocaleString('cs-CZ')}</small>{state.last_success_at && <small className="muted">Poslední úspěšné načtení: {new Date(state.last_success_at).toLocaleString('cs-CZ')}</small>}{state.error && <small className="error">{state.error}</small>}</div>}</div>;
+      })}</div><p className="muted fine-print">Sběr probíhá z veřejných seznamů, RSS a API. Portály mohou měnit rozhraní nebo omezit přístup. Hlídač prochází postupně omezený počet stránek; úplnost všech nabídek nelze zaručit. Síť práce vrací nejvýše 50 výsledků na dotaz.</p>
+      <h3>Další zdroje RSS / Atom</h3>{form.custom_feeds.map((f, i) => <div className="custom-feed" key={i}><label className="check-label"><input type="checkbox" checked={f.enabled} onChange={e => update('custom_feeds', form.custom_feeds.map((v, n) => n === i ? { ...v, enabled: e.target.checked } : v))} />{f.title}</label><small className="muted">{f.url}</small><button className="btn secondary" type="button" onClick={() => update('custom_feeds', form.custom_feeds.filter((_, n) => n !== i))}>Odebrat</button></div>)}
+      {form.custom_feeds.length < 10 && <div className="feed-add"><label>Název zdroje<input value={feedTitle} maxLength={100} onChange={e => setFeedTitle(e.target.value)} placeholder="Např. kariérní RSS firmy" /></label><label>Veřejná URL RSS / Atom<input value={feedUrl} onChange={e => setFeedUrl(e.target.value)} placeholder="https://…/rss" /></label><button className="btn secondary" type="button" disabled={!feedTitle.trim() || !/^https?:\/\//.test(feedUrl)} onClick={() => { update('custom_feeds', [...form.custom_feeds, { title: feedTitle.trim(), url: feedUrl.trim(), enabled: true }]); setFeedTitle(''); setFeedUrl(''); }}>Přidat zdroj</button></div>}
       </section>
-
-      <section className="card">
-        <h2>Poslední aktivity (audit log)</h2>
-        {audit.length === 0 ? (
-          <p className="muted">Zatím bez záznamů.</p>
-        ) : (
-          <table>
-            <thead><tr><th>Čas</th><th>Událost</th><th>Objekt</th></tr></thead>
-            <tbody>
-              {audit.map((a) => (
-                <tr key={a.id}>
-                  <td>{new Date(a.created_at).toLocaleString("cs-CZ")}</td>
-                  <td>{ACTION_LABELS[a.action] || a.action}</td>
-                  <td>{a.entity_type ? `${a.entity_type} #${a.entity_id}` : "–"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-      <section className="card">
-        <h2>Historie synchronizací</h2>
-        {syncRuns.length === 0 ? (
-          <p className="muted">Zatím bez záznamů – spusťte sync nebo počkejte na worker.</p>
-        ) : (
-          <table>
-            <thead><tr><th>Zdroj</th><th>Stav</th><th>Zpráva</th><th>Čas</th></tr></thead>
-            <tbody>
-              {syncRuns.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.source}</td>
-                  <td>{r.status}</td>
-                  <td>{r.message}</td>
-                  <td>{new Date(r.started_at).toLocaleString("cs-CZ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </div>
-  );
+      <section className="card grid"><h2>4. Pravidelné sledování</h2><label className="check-label"><input type="checkbox" checked={form.monitoring_enabled} onChange={e => update('monitoring_enabled', e.target.checked)} />Automaticky sledovat nabídky i při zavřené nástěnce</label><label>Jak často<select value={form.interval_minutes} onChange={e => update('interval_minutes', Number(e.target.value))}>{[15, 30, 60, 180, 360, 720, 1440].map(v => <option key={v} value={v}>{v < 60 ? `Každých ${v} minut` : v === 1440 ? 'Jednou denně' : `Každých ${v / 60} hodin`}</option>)}</select></label>{!data.worker_enabled && <p className="error">Worker je na serveru vypnutý; automatické sledování nyní neběží.</p>}</section>
+      <div className="save-bar"><button className="btn" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit a hledat nabídky'}</button><Link className="text-link" to="/">Zpět na nabídky</Link></div>
+    </form>
+  </div>;
 }

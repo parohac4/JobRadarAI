@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urljoin
 from datetime import UTC, datetime
 
 import feedparser
@@ -23,21 +24,24 @@ async def _fetch_feed(url: str) -> str:
     async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:
         current = url
         for _ in range(5):
-            resp = await client.get(
-                current,
-                headers={"User-Agent": "JobRadarAI/0.3 (+https://github.com/parohac4/JobRadarAI)"},
-            )
-            if resp.status_code in (301, 302, 303, 307, 308):
-                loc = resp.headers.get("location")
-                if not loc:
-                    break
-                await assert_public_url(loc)
-                current = loc
-                continue
-            resp.raise_for_status()
-            if len(resp.content) > MAX_FEED_BYTES:
-                raise ValueError("RSS feed je příliš velký")
-            return resp.text
+            async with client.stream(
+                "GET", current,
+                headers={"User-Agent": "JobRadarAI/0.4 (+https://github.com/parohac4/JobRadarAI)"},
+            ) as resp:
+                if resp.is_redirect:
+                    loc = resp.headers.get("location")
+                    if not loc:
+                        raise ValueError("Přesměrování bez cílové adresy")
+                    current = urljoin(current, loc)
+                    await assert_public_url(current)
+                    continue
+                resp.raise_for_status()
+                body = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > MAX_FEED_BYTES:
+                        raise ValueError("Zdroj je příliš velký (max 2 MB)")
+                return body.decode(resp.encoding or "utf-8", errors="replace")
     raise ValueError("Příliš mnoho přesměrování")
 
 

@@ -1,132 +1,49 @@
-# JobRadar AI
+# JobRadar — agregátor pracovních nabídek
 
-**Repozitář:** [github.com/parohac4/JobRadarAI](https://github.com/parohac4/JobRadarAI)
+Aplikace na [chcetejelena.cz/nastenka](https://chcetejelena.cz/nastenka/) soustředí hledání práce do dvou obrazovek: nabídky a nastavení hledání. Přihlášení, hesla a cookies zůstávají stejné.
 
-[English README](./README.en.md)
+- Obec z našeptávače (16 tisíc českých sídel), okruh 1–500 km a klíčová slova.
+- Výchozí zdroje Jobs.cz, Prace.cz a Síť práce (včetně veřejných nabídek MPSV/Úřadu práce). Volitelně Kariera.cz a až deset vlastních RSS/Atom zdrojů.
+- Automatický sběr i při zavřeném webu; nastavitelný interval 15 minut až jeden den, pozastavení a ruční spuštění.
+- Řazení podle stáří, vzdálenosti a shody. Duplicity se slučují, zdroje lze vypnout.
+- Volitelné AI preference napsané vlastními slovy; skóre a vysvětlení podle přání uživatele. Původní CV ani staré profesní údaje se pro toto hodnocení nepoužívají. Nový popis zneplatní stará skóre.
+- U každého zdroje stav, chyba a poslední úspěšné načtení. Vzdálenost je vzdušnou čarou mezi sídly; nejasná lokalita se nezaměňuje za nulovou vzdálenost. Hybrid se posuzuje podle místa dojíždění.
 
-Automatizace hledání zaměstnání: sběr inzerátů, AI hodnocení vhodnosti, návrhy reakcí a evidence výběrových řízení. Projekt je open-source (MIT) a připravený jako portfolio ukázka.
+Původní dashboard, CV/profesní profil, evidence žádostí, odkládání a generování odpovědí nejsou dostupné v UI ani přes původní API. Existující databázové tabulky zůstávají zachované; změna nemaže historická data. Staré odkazy v rozhraní přesměrují na nabídky či nastavení.
 
-**Produkční příklad:** [chcetejelena.cz/nastenka](https://chcetejelena.cz/nastenka/) (přihlášení pod `/nastenka/login`).
+## Nasazení existujícího serveru
 
-Osobní web na kořeni domény: [github.com/parohac4/chcetejelena-web](https://github.com/parohac4/chcetejelena-web).
-
-## Dokumentace
-
-Kompletní návod (DNS, nasazení, přístupy, provoz):
-
-| Dokument | Téma |
-|----------|------|
-| [docs/README.md](./docs/README.md) | Přehled všech dokumentů |
-| [docs/01-DNS-CLOUDFLARE.md](./docs/01-DNS-CLOUDFLARE.md) | Cloudflare Proxied, chyba 521 |
-| [docs/02-DEPLOY-VPS.md](./docs/02-DEPLOY-VPS.md) | Apache + Docker na Debian VPS |
-| [docs/03-PRISTUPY-A-KONFIGURACE.md](./docs/03-PRISTUPY-A-KONFIGURACE.md) | **`.env`, přihlášení, změna hesla/e-mailu** |
-| [docs/04-PROVOZ-A-OBNOVA.md](./docs/04-PROVOZ-A-OBNOVA.md) | Docker příkazy, zálohy, TLS |
-| [docs/05-OBSAH-REPozITARE.md](./docs/05-OBSAH-REPozITARE.md) | Co je v gitu / co ne |
-| [docs/06-CODE-REVIEW.md](./docs/06-CODE-REVIEW.md) | Code review 0.2.0 – nálezy, opravy, známá omezení |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architektura a datový model |
-| [docs/07-ETAPA2-PLAN.md](./docs/07-ETAPA2-PLAN.md) | IMAP, RSS, worker, notifikace |
-| [docs/08-LOKALITA-A-VZDALENOST.md](./docs/08-LOKALITA-A-VZDALENOST.md) | Filtr nabídek podle vzdálenosti od města |
-
-## Problém
-
-Hledání práce na více portálech je časově náročné. JobRadar AI centralizuje nabídky, porovnává je s vaším profilem, vysvětluje skóre a pomáhá připravit reakci – **bez automatického odesílání** bez vašeho souhlasu.
-
-## Funkce
-
-### Etapa 1 (MVP)
-
-- Dashboard se statistikami
-- Ruční přidání nabídky, import z URL, vložení těla e-mailového upozornění
-- Detekce duplicit napříč záznamy
-- AI hodnocení 0–100 + důvody, výhody, rizika (OpenAI volitelně, jinak transparentní heuristika „mock“)
-- Návrh motivačního textu (draft)
-- Evidence žádostí – stavy, historie a poznámky přímo v detailu nabídky
-- Profesní profil s editovatelnými lokalitami, rolemi, zkušenostmi a verzemi CV
-- Audit log (přihlášení, importy, hodnocení) v Nastavení
-- Světlý / tmavý režim UI
-- Demo režim s fiktivními daty
-
-### Etapa 0.3 (automatizace)
-
-- Worker: Gmail IMAP, RSS a Síť práce (JSON API), sync z Nastavení
-- Volitelné auto-hodnocení a notifikace (e-mail / Telegram) po importu
-- Import CV do profilu (PDF/DOCX)
-- Filtr a řazení nabídek podle vzdálenosti od domovského města (profil)
-
-## Architektura
-
-| Komponenta | Technologie |
-|------------|-------------|
-| API | Python 3.12, FastAPI, OpenAPI |
-| DB | PostgreSQL 16 |
-| UI | React 18, TypeScript, Vite |
-| Produkce | Apache (TLS) + Docker; dev: Caddy v `docker-compose.yml` |
-| AI | `AI_PROVIDER=openai` nebo `mock` |
-
-## Rychlý start (lokální vývoj)
+Připravený upgrade se týká pouze tohoto Compose projektu. Ověří původ kontejnerů, zálohuje pouze databázi JobRadaru a ID původních obrazů, sestaví nové obrazy a nahradí pouze `backend`, `worker`, `frontend` s `--no-deps`. Neregeneruje `.env`, nemění Apache, nepoužívá `down`, nerestartuje PostgreSQL ani ostatní služby.
 
 ```bash
-cp .env.example .env
-# Upravte ADMIN_PASSWORD a SECRET_KEY
-docker compose up --build
+cd /home/parohac4/skripty/JobRadar_AI
+sudo bash deploy/update-aggregator.sh
 ```
 
-Aplikace: [http://localhost:8080](http://localhost:8080)  
-Přihlášení: hodnoty `ADMIN_EMAIL` / `ADMIN_PASSWORD` z `.env`.
+Vyžaduje skutečná práva správce k Dockeru. Pouhé schválení příkazu v asistentovi nenahradí heslo pro sudo. Zálohy jsou v ignorované složce `.backups/` s omezenými právy.
 
-## Produkce na vlastní doméně
+Po nasazení zkontrolujte `/nastenka/api/v1/system/health`, přihlášení, nastavení a první dokončený sběr. Worker musí mít `WORKER_ENABLED=true`. Pro AI platí existující `AI_PROVIDER=openai`, `OPENAI_API_KEY` a `OPENAI_MODEL`; `AI_DAILY_MAX_CALLS` omezuje počet hodnocení (výchozí 50 denně). Bez připojené AI se nabídky normálně sbírají a UI upozorní, že AI hodnocení není dostupné. `AUTO_EVALUATE_ON_IMPORT` a původní IMAP/notifikace nový agregátor nepoužívá.
 
-1. DNS (Cloudflare) → [docs/01-DNS-CLOUDFLARE.md](./docs/01-DNS-CLOUDFLARE.md)
-2. Nasazení → [docs/02-DEPLOY-VPS.md](./docs/02-DEPLOY-VPS.md)
-3. Přístupy → [docs/03-PRISTUPY-A-KONFIGURACE.md](./docs/03-PRISTUPY-A-KONFIGURACE.md)
+## Rozsah zdrojů
 
-```bash
-sudo docker compose --env-file .env -f deploy/docker-compose.apache.yml up -d --build
-```
+Výběr pro běžné české hledání staví na Jobs.cz (odborné role), Prace.cz (regionální práce) a Sítí práce (veřejné API/MPSV). Kariera.cz je doplněk, který je ve výchozím stavu vypnutý. Další portály je možné připojit veřejným RSS/Atom zdrojem. Nastavení nevytváří účty ani nezveřejňuje profily na cizích portálech.
 
-## Demo režim
+Sběr používá veřejné stránky, RSS a API. U Jobs.cz/Prace.cz načítá obec a až čtyři další větší sídla v okruhu, mezi cykly střídá první tři stránky. Chybějící obecní stránka nebo změna formátu se ukáže jako chyba či částečný výsledek. Síť práce vrací nejvýše 50 výsledků na dotaz. Úplnost všech nabídek internetu není zaručena. Práce na dálku se zahrne, pokud ji zdroj v načteném seznamu vrátí. Nabídky nezachycené posledních 30 dní se skryjí; dostupnost se ověřuje na původním portálu. AI hodnotí dostupný přehled, který nemusí obsahovat celý inzerát.
 
-```env
-DEMO_MODE=true
-```
+Zdroje: [Jobs.cz](https://www.jobs.cz/prace/), [Prace.cz](https://www.prace.cz/nabidky/), [veřejné API Sítě práce](https://sitprace.cz/pro-vyvojare) (CC BY 4.0), [GeoNames](https://www.geonames.org/) (CC BY 4.0, viz `backend/app/data/README.md`).
 
-Při prvním startu s prázdnou DB se fiktivní data naplní automaticky. Obnovení: **Nastavení → Obnovit demo data**
-nebo `POST /api/v1/system/demo/reset` (mimo demo režim vrací 403).
+## Vývoj a ověření
 
-## Konfigurace AI
-
-```env
-AI_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-```
-
-## Testy
+Backend: Python/FastAPI, PostgreSQL. Frontend: React/TypeScript/Vite.
 
 ```bash
 cd backend
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/pytest tests -q   # unit testy; integrační se bez PostgreSQL přeskočí
+.venv/bin/python -m pytest tests -q
+cd ../frontend
+npm ci
+VITE_API_BASE=/nastenka/api/v1 VITE_BASE_PATH=/nastenka/ npm run build
 ```
 
-Integrační testy proti dočasné DB: [docs/04-PROVOZ-A-OBNOVA.md](./docs/04-PROVOZ-A-OBNOVA.md#testy).
+Nové integrační testy běží nad SQLite v paměti a nevyžadují produkční databázi. Historické testy závislé na PostgreSQL se bez testovacího `DATABASE_URL` přeskočí. Starší dokumentace v `docs/` popisuje také odstraněné funkce verze 0.3; aktuální rozsah určuje tento README.
 
-## Bezpečnost a soukromí
-
-- Do gitu nepatří `.env`, CV, e-maily ani export DB.
-- Produkční hesla pouze na serveru v `.env`.
-- Panel není na `/admin`, ale na konfigurovatelné cestě (např. `/nastenka`), s `noindex`.
-- Limit neúspěšných přihlášení, ochrana importu URL proti SSRF, oddělení textu inzerátu od instrukcí AI
-  (prompt injection), kontrola síly `SECRET_KEY` v produkci, backend v kontejneru bez roota.
-- CI skenuje celou historii gitu na uniklá tajemství (gitleaks).
-- Podrobnosti a známá omezení: [docs/06-CODE-REVIEW.md](./docs/06-CODE-REVIEW.md).
-
-## Licence
-
-MIT – viz [LICENSE](./LICENSE).
-
-## Roadmap
-
-- **Etapa 2:** import CV (PDF/DOCX), pokročilé reakce
-- **Etapa 3:** scheduler, RSS/API, IMAP
-- **Etapa 4:** další hardening, screenshoty do README
+Licence: MIT.

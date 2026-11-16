@@ -20,7 +20,8 @@ async def ai_calls_today(db: AsyncSession, user_id: int) -> int:
     result = await db.scalar(
         select(func.count(AiEvaluation.id))
         .join(JobListing, AiEvaluation.job_listing_id == JobListing.id)
-        .where(JobListing.user_id == user_id, AiEvaluation.created_at >= start, AiEvaluation.provider == "openai")
+        .where(JobListing.user_id == user_id, AiEvaluation.created_at >= start,
+               (AiEvaluation.provider == "openai") | AiEvaluation.provider.startswith("aggregate:"))
     )
     return int(result or 0)
 

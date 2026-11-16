@@ -25,15 +25,11 @@ export default function Layout() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">JobRadar AI</div>
+        <div className="brand">JobRadar</div>
         {demoMode && <span className="muted">Demo režim</span>}
         <nav className="nav">
-          <NavLink to="/" end>Přehled</NavLink>
-          <NavLink to="/jobs">Nabídky</NavLink>
-          <NavLink to="/sources">Zdroje RSS</NavLink>
-          <NavLink to="/applications">Žádosti</NavLink>
-          <NavLink to="/profile">Profil</NavLink>
-          <NavLink to="/settings">Nastavení</NavLink>
+          <NavLink to="/" end>Nabídky práce</NavLink>
+          <NavLink to="/settings">Nastavení hledání</NavLink>
         </nav>
         <div className="row">
           <button type="button" className="btn secondary" onClick={toggleTheme}>Světlý / tmavý</button>

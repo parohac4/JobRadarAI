@@ -32,7 +32,6 @@ async def lifespan(_app: FastAPI):
         await ensure_admin_user(session)
         user = (await session.execute(select(User).limit(1))).scalar_one_or_none()
         if user:
-            await ensure_default_feeds(session, user)
             await backfill_title_company_hashes(session)
         if get_settings().demo_mode:
             await seed_demo_if_empty(session)

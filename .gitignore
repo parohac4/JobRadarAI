@@ -24,3 +24,7 @@ data/postgres/
 .vscode/
 *.pem
 secrets/
+
+*.tsbuildinfo
+
+.backups/
