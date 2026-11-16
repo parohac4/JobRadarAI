@@ -83,7 +83,7 @@ export function errorText(err: unknown): string {
 }
 
 export const apiClient = {
-  get: <T>(path: string) => api<T>(path),
+  get: <T>(path: string, options?: Pick<RequestInit, "signal" | "cache">) => api<T>(path, options),
   post: <T>(path: string, body?: unknown) =>
     api<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) }),

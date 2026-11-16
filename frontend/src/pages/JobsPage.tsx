@@ -4,16 +4,27 @@ import { apiClient, errorText } from '../api';
 import { safeHref } from '../utils/safeUrl';
 import { sourceNames, type InteractionState, type MonitorStatus, type Offer, type OfferList, type SettingsResponse } from '../aggregate';
 
+type ListFilters = { sort: string; source: string; query: string; seen: string; markedOnly: boolean; page: number };
+
+function readFilters(params: URLSearchParams): ListFilters {
+  const sort = params.get('sort') || '';
+  const seen = params.get('seen') || 'all';
+  const page = Number(params.get('page') || 0);
+  return {
+    sort: ['newest', 'oldest', 'distance', 'match'].includes(sort) ? sort : '',
+    source: params.get('source') || '', query: params.get('q') || '',
+    seen: ['unseen', 'seen'].includes(seen) ? seen : 'all', markedOnly: params.get('marked') === '1',
+    page: Number.isSafeInteger(page) && page >= 0 ? page : 0,
+  };
+}
+
 export default function JobsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedSort = searchParams.get('sort') || '';
-  const sort = ['newest', 'oldest', 'distance', 'match'].includes(requestedSort) ? requestedSort : '';
-  const source = searchParams.get('source') || '';
-  const query = searchParams.get('q') || '';
-  const seen = ['unseen', 'seen'].includes(searchParams.get('seen') || '') ? searchParams.get('seen')! : 'all';
-  const markedOnly = searchParams.get('marked') === '1';
-  const requestedPage = Number(searchParams.get('page') || 0);
-  const page = Number.isSafeInteger(requestedPage) && requestedPage >= 0 ? requestedPage : 0;
+  const [filters, setFilters] = useState(() => readFilters(searchParams));
+  const { sort, source, query, seen, markedOnly, page } = filters;
+  const [filterRevision, setFilterRevision] = useState(0);
+  const setSearchParamsRef = useRef(setSearchParams);
+  setSearchParamsRef.current = setSearchParams;
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [status, setStatus] = useState<MonitorStatus | null>(null);
   const [result, setResult] = useState<OfferList>({ items: [], total: 0, has_more: false });
@@ -28,40 +39,48 @@ export default function JobsPage() {
   const requestVersion = useRef(0);
   const refreshRef = useRef<() => Promise<unknown>>(async () => {});
   const mountedRef = useRef(false);
+  const activeRequestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => { setFilters(readFilters(searchParams)); }, [searchParams]);
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; requestVersion.current++; };
+    return () => { mountedRef.current = false; requestVersion.current++; activeRequestRef.current?.abort(); };
   }, []);
 
   function updateFilters(changes: Record<string, string>) {
-    setSearchParams(previous => {
-      const next = new URLSearchParams(previous);
-      if (!('page' in changes)) next.delete('page');
-      for (const [key, value] of Object.entries(changes)) {
-        if (value && value !== 'all' && !(key === 'page' && value === '0')) next.set(key, value);
-        else next.delete(key);
-      }
-      return next;
-    }, { replace: true });
+    const next = new URLSearchParams(searchParams);
+    if (!('page' in changes)) next.delete('page');
+    for (const [key, value] of Object.entries(changes)) {
+      if (value && value !== 'all' && !(key === 'page' && value === '0')) next.set(key, value);
+      else next.delete(key);
+    }
+    // Apply controls immediately; URL persistence must not gate reloading.
+    requestVersion.current++;
+    activeRequestRef.current?.abort();
+    setLoading(true);
+    setFilters(readFilters(next));
+    setFilterRevision(revision => revision + 1);
+    setSearchParams(next, { replace: true });
   }
 
   const reload = useCallback(async () => {
     if (!mountedRef.current) return null;
     const version = ++requestVersion.current;
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
     const params = new URLSearchParams({ skip: String(page * 50), limit: '50', q: query, seen });
     if (sort) params.set('sort', sort);
     if (source) params.set('source', source);
     if (markedOnly) params.set('marked_only', 'true');
+    const statePromise = apiClient.get<MonitorStatus>('/aggregate/status', { signal: controller.signal, cache: 'no-store' }).catch(() => null);
     try {
-      const [jobs, state] = await Promise.all([
-        apiClient.get<OfferList>(`/aggregate/jobs?${params}`),
-        apiClient.get<MonitorStatus>('/aggregate/status'),
-      ]);
+      const jobs = await apiClient.get<OfferList>(`/aggregate/jobs?${params}`, { signal: controller.signal, cache: 'no-store' });
       if (version === requestVersion.current) {
-        setResult(jobs); setStatus(state); setError('');
+        setResult(jobs); setLoading(false); setError('');
         if (page > 0 && jobs.items.length === 0) {
-          setSearchParams(previous => {
+          setSearchParamsRef.current(previous => {
             const next = new URLSearchParams(previous);
             const lastPage = Math.max(0, Math.ceil(jobs.total / 50) - 1);
             if (lastPage) next.set('page', String(lastPage)); else next.delete('page');
@@ -69,20 +88,22 @@ export default function JobsPage() {
           }, { replace: true });
         }
       }
+      const state = await statePromise;
+      if (version === requestVersion.current && state) setStatus(state);
       return state;
     } catch (err) {
-      if (version === requestVersion.current) setError(errorText(err));
+      if (!controller.signal.aborted && version === requestVersion.current) setError(errorText(err));
       return null;
     } finally { if (version === requestVersion.current) setLoading(false); }
-  }, [page, query, sort, source, seen, markedOnly, setSearchParams]);
+  }, [page, query, sort, source, seen, markedOnly, filterRevision]);
   refreshRef.current = reload;
 
   useEffect(() => {
     apiClient.get<SettingsResponse>('/aggregate/settings').then(setSettings).catch(e => setError(errorText(e)));
   }, []);
   useEffect(() => {
-    const timer = window.setTimeout(() => { reload(); }, 250);
-    return () => { clearTimeout(timer); requestVersion.current++; };
+    void reload();
+    return () => { requestVersion.current++; activeRequestRef.current?.abort(); };
   }, [reload]);
   useEffect(() => {
     const timer = window.setInterval(async () => {
@@ -149,25 +170,41 @@ export default function JobsPage() {
     {settings && !settings.worker_enabled && <p className="error">Pravidelný sběr je na serveru vypnutý.</p>}
     {status?.last_run?.details.ai_error && <p className="info">{status.last_run.details.ai_error}</p>}
     {Object.values(status?.last_run?.details.sources || {}).some(s => s.status !== 'ok') && <p className="info">Některé zdroje se nepodařilo načíst celé. <Link className="text-link" to="/settings">Zobrazit stav zdrojů →</Link></p>}
-    <section className="results-toolbar" aria-label="Filtry nabídek">
-      <strong>{result.total} nabídek{filtered ? ' po filtrování' : ' v okolí'}</strong>
-      <div className="row">
-        <input aria-label="Hledat v nabídkách" placeholder="Hledat v nabídkách…" value={query} onChange={e => updateFilters({ q: e.target.value })} />
-        <select aria-label="Pracovní portál" value={source} onChange={e => updateFilters({ source: e.target.value })}>
-          <option value="">Všechny zdroje</option>{config?.sources.map(s => <option value={s} key={s}>{sourceNames[s]}</option>)}
-          {config?.custom_feeds.some(f => f.enabled) && <option value="custom">Vlastní RSS</option>}
-        </select>
-        <select aria-label="Viděné nabídky" value={seen} onChange={e => updateFilters({ seen: e.target.value })}>
-          <option value="all">Viděné i neviděné</option><option value="unseen">Skrýt viděné</option><option value="seen">Jen viděné</option>
-        </select>
-        <select aria-label="Řazení nabídek" title="Stáří podle prvního načtení nabídky" value={sort || config?.sort || 'newest'} onChange={e => updateFilters({ sort: e.target.value })}>
-          <option value="newest">Od nejnovějších</option><option value="oldest">Od nejstarších</option><option value="distance">Nejmenší vzdálenost</option><option value="match">Největší shoda s preferencemi</option>
-        </select>
-        <label className="check-label marked-filter"><input type="checkbox" checked={markedOnly} onChange={e => updateFilters({ marked: e.target.checked ? '1' : '' })} />Pouze označené</label>
-        {filtered && <button className="btn secondary" onClick={() => updateFilters({ q: '', source: '', seen: '', marked: '' })}>Zrušit filtry</button>}
+    <section className="card results-toolbar" aria-label="Filtry nabídek" aria-describedby="filters-help">
+      <div className="results-toolbar-heading">
+        <strong aria-live="polite">{loading ? 'Načítám nabídky…' : `${result.total} nabídek${filtered ? ' po filtrování' : ' v okolí'}`}</strong>
+        {filtered && <button type="button" className="btn secondary" onClick={() => updateFilters({ q: '', source: '', seen: '', marked: '' })}>Zrušit filtry</button>}
       </div>
+      <div className="results-filters">
+        <label className="results-filter">
+          <span>Hledat v nabídkách</span>
+          <input placeholder="Pozice, firma, klíčové slovo…" value={query} onChange={e => updateFilters({ q: e.target.value })} />
+        </label>
+        <label className="results-filter">
+          <span>Pracovní portál</span>
+          <select value={source} onChange={e => updateFilters({ source: e.target.value })}>
+            <option value="">Všechny zdroje</option>{config?.sources.map(s => <option value={s} key={s}>{sourceNames[s]}</option>)}
+            {config?.custom_feeds.some(f => f.enabled) && <option value="custom">Vlastní RSS</option>}
+          </select>
+        </label>
+        <label className="results-filter">
+          <span>Zobrazení nabídek</span>
+          <select value={seen} onChange={e => updateFilters({ seen: e.target.value })}>
+            <option value="all">Viděné i neviděné</option><option value="unseen">Skrýt viděné</option><option value="seen">Jen viděné</option>
+          </select>
+        </label>
+        <label className="results-filter">
+          <span>Seřadit podle</span>
+          <select title="Stáří podle prvního načtení nabídky" value={sort || config?.sort || 'newest'} onChange={e => updateFilters({ sort: e.target.value })}>
+            <option value="newest">Od nejnovějších</option><option value="oldest">Od nejstarších</option><option value="distance">Nejmenší vzdálenost</option><option value="match">Největší shoda</option>
+          </select>
+        </label>
+      </div>
+      <div className="results-filter-options">
+        <label className="check-label marked-filter"><input type="checkbox" checked={markedOnly} onChange={e => updateFilters({ marked: e.target.checked ? '1' : '' })} />Pouze označené hvězdičkou</label>
+      </div>
+      <p id="filters-help" className="muted fine-print">Otevření detailu nebo původního inzerátu nabídku označí jako viděnou. Hvězdičkou si ji můžete samostatně označit.</p>
     </section>
-    <p className="muted fine-print">Otevření detailu nebo původního inzerátu nabídku označí jako viděnou. Hvězdičkou si ji můžete samostatně označit.</p>
     {loading ? <p role="status">Načítám nabídky…</p> : result.items.length === 0 ? <section className="card empty-state">
       <h2>{filtered ? 'Žádná nabídka pro zvolené filtry' : 'Zatím žádná nabídka pro toto hledání'}</h2>
       <p className="muted">{filtered ? 'Zkuste zobrazit také viděné nabídky nebo zrušte ostatní filtry.' : 'Spusťte sběr, rozšiřte okruh nebo upravte klíčová slova.'}</p>
