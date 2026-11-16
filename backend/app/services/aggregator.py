@@ -15,7 +15,7 @@ from app.services.ai import _chat, normalize_evaluation, _wrap_untrusted
 from app.services.jobs import create_job
 from app.services.places import resolve_place, location_distance
 from app.services.geo import normalize_place
-from app.services.portal_import import CATALOG, fetch_source, source_id
+from app.services.portal_import import CATALOG, fetch_source, source_id, source_error
 from app.services.post_import import ai_calls_today
 
 logger = logging.getLogger("jobradar.aggregator")
@@ -117,7 +117,10 @@ async def monitor(db, user, *, force=False):
     page = 1 + ((previous.details or {}).get("cycle", 0) % 3) if previous else 1
     for key in keys:
         name = next((x["name"] for x in CATALOG if x["id"] == key), next((f.title for f in config.custom_feeds if "custom:" + str(f.url) == key), key))
-        previous_success = ((previous.details or {}).get("sources", {}).get(key, {}).get("last_success_at")) if previous else None
+        previous_source = (previous.details or {}).get("sources", {}).get(key, {}) if previous else {}
+        previous_success = previous_source.get("last_success_at") if (
+            previous_source.get("status") == "ok" or previous_source.get("last_success_is_complete")
+        ) else None
         try:
             items, warnings = await fetch_source(key, config, home, page=page)
             imported = 0
@@ -141,11 +144,12 @@ async def monitor(db, user, *, force=False):
                         imported += 1
             stats[key] = {"name": name, "status": "partial" if warnings else "ok", "found": len(items), "created": imported,
                           "error": "; ".join(warnings), "checked_at": datetime.now(UTC).isoformat(),
-                          "last_success_at": datetime.now(UTC).isoformat()}
+                          "last_success_at": previous_success if warnings else datetime.now(UTC).isoformat(),
+                          "last_success_is_complete": True}
         except Exception as exc:
             logger.exception("Import source %s", name)
-            stats[key] = {"name": name, "status": "error", "error": str(exc)[:500], "checked_at": datetime.now(UTC).isoformat(),
-                          "last_success_at": previous_success}
+            stats[key] = {"name": name, "status": "error", "error": source_error(exc)[:1000], "checked_at": datetime.now(UTC).isoformat(),
+                          "last_success_at": previous_success, "last_success_is_complete": True}
     ai_error = ""
     evaluated = 0
     if config.ai_enabled and config.ai_preferences.strip():

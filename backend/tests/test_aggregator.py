@@ -151,3 +151,23 @@ async def test_monitor_partial_failure_dedup_and_freshness(store, monkeypatch):
     assert 'jobs' in job.requirements_text and 'prace' in job.requirements_text
     assert len((await db.execute(select(SyncRun))).scalars().all()) == 1
     assert (await offers(db, user.id))['total'] == 1
+
+async def test_partial_import_preserves_last_complete_success(store, monkeypatch):
+    from app.models.sync import SyncRun
+    from sqlalchemy import select
+    db, user, profile = store
+    db.scalar = AsyncMock(return_value=True)
+    previous_success = '2026-11-15T10:00:00+00:00'
+    db.add(SyncRun(user_id=user.id, source='aggregator', status='ok', details={
+        'sources': {'jobs': {'status': 'ok', 'last_success_at': previous_success}}, 'cycle': 1
+    }))
+    await db.commit()
+    async def fetch(key, *args, **kwargs):
+        return [], ['Jedna lokalita je dočasně nedostupná.'] if key == 'jobs' else []
+    monkeypatch.setattr('app.services.aggregator.fetch_source', fetch)
+    result = await monitor(db, user, force=True)
+    jobs = result['sources']['jobs']
+    assert jobs['status'] == 'partial'
+    assert jobs['last_success_at'] == previous_success
+    assert jobs['checked_at'] != previous_success
+    assert jobs['last_success_is_complete']

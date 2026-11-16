@@ -1,15 +1,111 @@
 """Bounded public HTML/RSS/API readers; no login or application submission."""
 import asyncio
+import logging
+import time
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 
 import feedparser
+import httpx
 from bs4 import BeautifulSoup
 
 from app.models.enums import JobSource
 from app.schemas.job import JobListingCreate
 from app.services.rss_import import _fetch_feed, _entry_to_job
 from app.services.sitprace_import import build_search_url, fetch_sitprace, _job_text
-from app.services.places import nearby_centres, slug
+from app.services.places import nearby_places, slug
+
+logger = logging.getLogger("jobradar.portals")
+
+# GeoNames admin1 codes -> region segments used by the public portal pages.
+REGION_SLUGS = {
+    "52": "praha", "78": "jihomoravsky", "79": "jihocesky", "80": "vysocina",
+    "81": "karlovarsky", "82": "kralovehradecky", "83": "liberecky", "84": "olomoucky",
+    "85": "moravskoslezsky", "86": "pardubicky", "87": "plzensky", "88": "stredocesky",
+    "89": "ustecky", "90": "zlinsky",
+}
+_ROUTE_CACHE: dict[tuple, tuple[str, float]] = {}
+ROUTE_TTL = 24 * 60 * 60
+
+
+def locality_routes(key: str, place: dict) -> list[str]:
+    city_slug = slug(place["name"])
+    region = REGION_SLUGS.get(place.get("region"))
+    if key == "jobs":
+        routes = [f"https://www.jobs.cz/prace/{city_slug}/"]
+        if region:
+            routes.append(f"https://beta.jobs.cz/prace/{region}/{city_slug}/")
+    else:
+        routes = [f"https://www.prace.cz/nabidky/{city_slug}/"]
+        if region:
+            routes.append(f"https://www.prace.cz/nabidky/{region}/{city_slug}/")
+    return routes
+
+
+async def _read_with_retry(url: str) -> str:
+    for attempt in range(2):
+        try:
+            return await _fetch_feed(url)
+        except httpx.HTTPStatusError as exc:
+            if attempt or exc.response.status_code not in (429, 500, 502, 503, 504):
+                raise
+            try:
+                delay = max(2, int(exc.response.headers.get("Retry-After", "2")))
+            except ValueError:
+                # A date-based Retry-After is left to the next scheduled run.
+                raise exc
+            if delay > 5:
+                raise
+        except httpx.TransportError:
+            if attempt:
+                raise
+            delay = 2
+        await asyncio.sleep(delay)
+    raise RuntimeError("Nedokončené načtení portálu")
+
+
+async def fetch_locality(key: str, place: dict, page: int) -> list[JobListingCreate]:
+    cache_key = (key, place["label"])
+    routes = locality_routes(key, place)
+    cached = _ROUTE_CACHE.get(cache_key)
+    if cached and cached[1] > time.monotonic() and cached[0] in routes:
+        routes.remove(cached[0])
+        routes.insert(0, cached[0])
+    last_error = None
+    for route in routes:
+        url = f"{route}?{urlencode({'page': page})}"
+        try:
+            body = await _read_with_retry(url)
+            items = parse_portal(body, url)
+            if len(_ROUTE_CACHE) >= 512 and cache_key not in _ROUTE_CACHE:
+                _ROUTE_CACHE.pop(next(iter(_ROUTE_CACHE)))
+            _ROUTE_CACHE[cache_key] = (route, time.monotonic() + ROUTE_TTL)
+            return items
+        except httpx.HTTPStatusError as exc:
+            last_error = exc
+            if exc.response.status_code not in (404, 410):
+                raise
+            # Missing routes require another address, not repeated retries.
+            if _ROUTE_CACHE.get(cache_key, (None,))[0] == route:
+                _ROUTE_CACHE.pop(cache_key, None)
+            logger.info("Missing %s locality route: %s", key, url)
+    raise last_error or ValueError("Pro lokalitu není dostupná adresa portálu.")
+
+
+def source_error(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status in (404, 410):
+            return "Stránka lokality není dostupná ani na náhradní adrese. Další pokus proběhne při příští kontrole."
+        if status == 429:
+            return "Portál dočasně omezil počet požadavků. Sběr se zopakuje při příští kontrole."
+        if status in (401, 403):
+            return "Portál nepovolil automatické načtení. Ostatní zdroje se dál sledují."
+        return f"Portál je dočasně nedostupný (HTTP {status}). Sběr se zopakuje při příští kontrole."
+    if isinstance(exc, httpx.TransportError):
+        return "Spojení s portálem se nepodařilo ani při opakovaném pokusu. Další pokus proběhne při příští kontrole."
+    if isinstance(exc, ValueError):
+        return str(exc)[:200]
+    return "Zdroj se nepodařilo zpracovat. Další pokus proběhne při příští kontrole."
 
 CATALOG = [
     {"id": "jobs", "name": "Jobs.cz", "description": "Odborné, kancelářské a technické pozice", "url": "https://www.jobs.cz/prace/"},
@@ -79,15 +175,19 @@ async def fetch_source(key: str, config, home: dict, *, page: int = 1) -> tuple[
                 job.location = job.title.rsplit(" - ", 1)[-1] if " - " in job.title else ""
             items.append(job)
         return items, errors
-    base, path = ("https://www.jobs.cz", "prace") if key == "jobs" else ("https://www.prace.cz", "nabidky")
-    for city in nearby_centres(home, config.radius_km):
+    for place in nearby_places(home, config.radius_km):
         # Public municipality landing pages include local surroundings. The
         # final radius is always applied to the real workplace on our server.
-        url = f"{base}/{path}/{slug(city)}/?{urlencode({'page': page})}"
         try:
-            items.extend(parse_portal(await _fetch_feed(url), url))
+            items.extend(await fetch_locality(key, place, page))
         except Exception as exc:
-            errors.append(f"{city}: {str(exc)[:180]}")
+            logger.warning("Locality import failed: %s / %s", key, place["label"], exc_info=True)
+            errors.append(f"{place['name']}: {source_error(exc)}")
+            if isinstance(exc, httpx.TransportError) or (
+                isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403, 429, 503)
+            ):
+                errors.append("Zbývající lokality tohoto portálu zkusím při příští kontrole.")
+                break
         await asyncio.sleep(0.3)
     if not items and errors:
         raise ValueError("; ".join(errors))

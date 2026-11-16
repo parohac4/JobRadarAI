@@ -12,7 +12,7 @@ PLACES = []
 BY_NAME = defaultdict(list)
 for name, lat, lon, population, region, district in ROWS:
     label = name if COUNTS[normalize_place(name)] == 1 else f"{name} ({lat:.5f}, {lon:.5f})"
-    place = {"label": label, "name": name, "lat": lat, "lon": lon, "population": population}
+    place = {"label": label, "name": name, "lat": lat, "lon": lon, "population": population, "region": region}
     PLACES.append(place)
     BY_NAME[normalize_place(name)].append(place)
 BY_LABEL = {p["label"].casefold(): p for p in PLACES}
@@ -62,10 +62,17 @@ def location_distance(home: dict, location: str) -> tuple[float | None, bool]:
     return round(min(haversine_km(home["lat"], home["lon"], p["lat"], p["lon"]) for p in matches), 1), False
 
 
-def nearby_centres(home: dict, radius: int) -> list[str]:
+def nearby_places(home: dict, radius: int) -> list[dict]:
     towns = [p for p in PLACES if p["population"] >= 5000 and haversine_km(home["lat"], home["lon"], p["lat"], p["lon"]) <= radius]
     towns.sort(key=lambda p: -p["population"])
-    return list(dict.fromkeys([home["name"], *[p["name"] for p in towns]]))[:5]
+    result = {home["label"]: home}
+    for place in towns:
+        result.setdefault(place["label"], place)
+    return list(result.values())[:5]
+
+
+def nearby_centres(home: dict, radius: int) -> list[str]:
+    return [p["name"] for p in nearby_places(home, radius)]
 
 
 def slug(city: str) -> str:
