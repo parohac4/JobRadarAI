@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiClient, errorText } from '../api';
 import { safeHref } from '../utils/safeUrl';
+import JobNoteEditor from '../components/JobNoteEditor';
 import { sourceNames, type InteractionState, type MonitorStatus, type Offer, type OfferList, type SettingsResponse } from '../aggregate';
 
 type ListFilters = { sort: string; source: string; query: string; seen: string; markedOnly: boolean; page: number };
@@ -222,6 +223,7 @@ export default function JobsPage() {
           <p className="company">{job.company || 'Zaměstnavatel neuveden'}</p>
           <p className="muted">{job.location || 'Místo práce neuvedeno'} · {job.distance_km !== null ? `${job.distance_km} km` : job.remote ? 'Na dálku / celá ČR' : 'Vzdálenost neznámá'}</p>
           <p className="offer-preview">{job.summary || job.preview}</p>
+          <JobNoteEditor jobId={job.id} title={job.title} initialNote={job.note || { text: '', updated_at: null }} onSaved={note => setResult(previous => ({ ...previous, items: previous.items.map(item => item.id === job.id ? { ...item, note } : item) }))} />
         </div>
         <div className="offer-action">
           {job.score !== null && <div className="match-score"><strong>{job.score}%</strong><small>{job.score_kind === 'ai' ? 'AI shoda' : 'Shoda slov'}</small></div>}

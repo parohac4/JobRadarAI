@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.models.evaluation import AiEvaluation
 from app.models.job import JobListing
 from app.models.job_interaction import JobInteraction
+from app.models.job_note import JobNote
 from app.models.profile import ProfessionalProfile
 from app.models.sync import SyncRun
 from app.schemas.aggregator import SearchSettings
@@ -207,6 +208,8 @@ async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query
     state_rows = await db.execute(select(JobInteraction.job_id, JobInteraction.seen_at, JobInteraction.marked,
         JobInteraction.marked_at).where(JobInteraction.user_id == user_id))
     states = {row.job_id: row for row in state_rows}
+    note_rows = await db.execute(select(JobNote.job_id, JobNote.text, JobNote.updated_at).where(JobNote.user_id == user_id))
+    notes = {row.job_id: {"text": row.text, "updated_at": row.updated_at} for row in note_rows}
     rows = []
     for job in jobs:
         state = states.get(job.id)
@@ -239,7 +242,8 @@ async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query
             "url": job.url, "source": display_key, "imported_at": job.imported_at, "distance_km": distance,
             "remote": remote, "score": score, "score_kind": "ai" if ev else ("keywords" if kw_score is not None else None),
             "summary": ev.summary if ev else "", "preview": plain_text(job.raw_text)[:300],
-            "seen_at": seen_at, "marked": marked, "marked_at": state.marked_at if state else None})
+            "seen_at": seen_at, "marked": marked, "marked_at": state.marked_at if state else None,
+            "note": notes.get(job.id, {"text": "", "updated_at": None})})
     order = sort or config.sort
     if order == "distance":
         rows.sort(key=lambda j: (j["distance_km"] is None, j["distance_km"] if j["distance_km"] is not None else 1e9, -j["id"]))

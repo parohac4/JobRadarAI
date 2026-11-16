@@ -274,3 +274,57 @@ async def test_interaction_api_auth_ownership_and_filters(store):
             config['sort'] = 'oldest'
             assert (await client.put('/api/v1/aggregate/settings', json=config)).status_code == 200
     finally: app.dependency_overrides.clear()
+
+async def test_notes_create_edit_delete_and_ownership(store):
+    from sqlalchemy import select
+    from app.models.job_note import JobNote
+    db, user, profile = store
+    job = add_job(db, user, 'Poznámka', 'Strakonice', 'https://www.jobs.cz/rpd/notes/')
+    other = User(email='note-other@example.test', hashed_password='unused', is_active=True)
+    db.add(other)
+    await db.flush()
+    foreign = add_job(db, other, 'Cizí', 'Strakonice', 'https://www.jobs.cz/rpd/foreign-note/')
+    await db.commit()
+    async def override_db(): yield db
+    app.dependency_overrides[get_db] = override_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            path = f'/api/v1/aggregate/jobs/{job.id}/note'
+            assert (await client.put(path, json={'text': 'První'})).status_code == 401
+            app.dependency_overrides[get_current_user] = lambda: user
+            app.dependency_overrides[require_write_access] = lambda: None
+            foreign_path = f'/api/v1/aggregate/jobs/{foreign.id}/note'
+            assert (await client.put(foreign_path, json={'text': 'Cizí'})).status_code == 404
+            assert (await client.delete(foreign_path)).status_code == 404
+            first = await client.put(path, json={'text': 'Zavolat v úterý\nZeptat se na směny.'})
+            assert first.status_code == 200 and first.json()['updated_at']
+            assert (await client.get(f'/api/v1/aggregate/jobs/{job.id}')).json()['note']['text'] == first.json()['text']
+            assert (await client.put(path, json={'text': 'Pohovor domluven.'})).json()['text'] == 'Pohovor domluven.'
+            assert (await offers(db, user.id))['items'][0]['note']['text'] == 'Pohovor domluven.'
+            await client.patch(f'/api/v1/aggregate/jobs/{job.id}/interaction', json={'seen': True, 'marked': True})
+            assert (await client.get(f'/api/v1/aggregate/jobs/{job.id}')).json()['note']['text'] == 'Pohovor domluven.'
+            assert (await client.put(path, json={'text': 'x' * 10001})).status_code == 422
+            assert (await client.delete(path)).json() == {'text': '', 'updated_at': None}
+            assert (await db.execute(select(JobNote))).scalar_one_or_none() is None
+            assert (await client.delete(path)).status_code == 200
+            await client.put(path, json={'text': 'Nová poznámka'})
+            assert (await client.put(path, json={'text': ' \n '})).json()['text'] == ''
+            assert (await offers(db, user.id))['items'][0]['note']['text'] == ''
+    finally: app.dependency_overrides.clear()
+
+
+async def test_note_survives_reimport(store):
+    from app.schemas.job import JobListingCreate
+    from app.services.jobs import create_job
+    from app.services.job_notes import save_note
+    db, user, profile = store
+    data = JobListingCreate(title='Technik s poznámkou', company='Firma', location='Strakonice',
+        url='https://www.jobs.cz/rpd/note-reimport/', raw_text='Technická práce', source='api')
+    job, _ = await create_job(db, user.id, data)
+    await db.commit()
+    await save_note(db, user.id, job.id, 'Kontakt: pan Novák')
+    repeated, duplicate = await create_job(db, user.id, data)
+    await db.commit()
+    assert duplicate is not None and repeated.id == job.id
+    result = await offers(db, user.id)
+    assert result['total'] == 1 and result['items'][0]['note']['text'] == 'Kontakt: pan Novák'

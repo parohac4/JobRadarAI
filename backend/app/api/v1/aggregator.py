@@ -6,12 +6,14 @@ from app.core.deps import get_current_user, require_write_access
 from app.database import AsyncSessionLocal, get_db
 from app.models.job import JobListing
 from app.models.job_interaction import JobInteraction
-from app.schemas.aggregator import InteractionUpdate, SearchSettings
+from app.models.job_note import JobNote
+from app.schemas.aggregator import InteractionUpdate, NoteUpdate, SearchSettings
 from app.services import aggregator as service
 from app.services.job_import import assert_public_url, UnsafeUrlError
 from app.services.places import resolve_place, suggestions
 from app.services.portal_import import CATALOG
 from app.services.job_interactions import update_interaction
+from app.services.job_notes import save_note
 
 router = APIRouter()
 
@@ -98,6 +100,27 @@ async def detail(job_id: int, user=Depends(get_current_user), db=Depends(get_db)
         raise HTTPException(404, "Nabídka nenalezena")
     state = (await db.execute(select(JobInteraction.seen_at, JobInteraction.marked, JobInteraction.marked_at)
         .where(JobInteraction.user_id == user.id, JobInteraction.job_id == job_id))).one_or_none()
+    note = (await db.execute(select(JobNote.text, JobNote.updated_at)
+        .where(JobNote.user_id == user.id, JobNote.job_id == job_id))).one_or_none()
     return {"id": job.id, "title": job.title, "company": job.company, "location": job.location,
             "url": job.url, "raw_text": service.plain_text(job.raw_text), "seen_at": state.seen_at if state else None,
-            "marked": state.marked if state else False, "marked_at": state.marked_at if state else None}
+            "marked": state.marked if state else False, "marked_at": state.marked_at if state else None,
+            "note": {"text": note.text, "updated_at": note.updated_at} if note else {"text": "", "updated_at": None}}
+
+
+async def _require_owned_job(db, user_id: int, job_id: int):
+    if await db.scalar(select(JobListing.id).where(JobListing.id == job_id, JobListing.user_id == user_id)) is None:
+        raise HTTPException(404, "Nabídka nenalezena")
+
+
+@router.put("/jobs/{job_id}/note")
+async def update_note(job_id: int, data: NoteUpdate, _=Depends(require_write_access),
+                      user=Depends(get_current_user), db=Depends(get_db)):
+    await _require_owned_job(db, user.id, job_id)
+    return await save_note(db, user.id, job_id, data.text)
+
+
+@router.delete("/jobs/{job_id}/note")
+async def delete_note(job_id: int, _=Depends(require_write_access), user=Depends(get_current_user), db=Depends(get_db)):
+    await _require_owned_job(db, user.id, job_id)
+    return await save_note(db, user.id, job_id, "")

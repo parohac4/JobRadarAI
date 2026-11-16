@@ -7,9 +7,10 @@ export type SearchSettings = {
 export type Source = { id: string; name: string; description: string; url: string };
 export type SettingsResponse = { settings: SearchSettings; sources: Source[]; ai_available: boolean; worker_enabled: boolean; ai_daily_limit: number };
 export type InteractionState = { id: number; seen_at: string | null; marked: boolean; marked_at: string | null };
+export type JobNote = { text: string; updated_at: string | null };
 export type Offer = InteractionState & { title: string; company: string; location: string; url: string; source: string;
   imported_at: string; distance_km: number | null; remote: boolean; score: number | null;
-  score_kind: 'ai' | 'keywords' | null; summary: string; preview: string };
+  score_kind: 'ai' | 'keywords' | null; summary: string; preview: string; note: JobNote };
 export type OfferList = { items: Offer[]; total: number; has_more: boolean };
 export type SourceStatus = { name: string; status: string; found?: number; created?: number; error: string; checked_at: string; last_success_at?: string | null };
 export type MonitorStatus = { monitoring_enabled: boolean; interval_minutes: number; settings_current: boolean;

@@ -7,6 +7,7 @@ Aplikace na [chcetejelena.cz/nastenka](https://chcetejelena.cz/nastenka/) soust�
 - Automatický sběr i při zavřeném webu; nastavitelný interval 15 minut až jeden den, pozastavení a ruční spuštění.
 - Řazení od nejnovějších, od nejstarších, podle nejmenší vzdálenosti a shody. Stáří znamená datum prvního načtení. Duplicity se slučují, zdroje lze vypnout.
 - Kliknutí na detail či původní inzerát ukládá stav „Viděno“. Hvězdičkou lze nabídku samostatně označit; oba stavy lze zrušit. Filtry skrýt viděné, jen viděné a pouze označené lze kombinovat s dalšími filtry. Stavy jsou v databázi u účtu a přežijí nové načtení i opakovaný import. Filtry seznamu jsou v URL a zachovají se při návratu z detailu.
+- Poznámka u každé nabídky, dostupná v seznamu i detailu. Ukládá se automaticky po 600 ms bez psaní a při opuštění pole; lze ji upravit a smazat. Poznámky jsou soukromé pro účet a nepřepisují se importem.
 - Volitelné AI preference napsané vlastními slovy; skóre a vysvětlení podle přání uživatele. Původní CV ani staré profesní údaje se pro toto hodnocení nepoužívají. Nový popis zneplatní stará skóre.
 - U každého zdroje stav, chyba a poslední úspěšné načtení. Vzdálenost je vzdušnou čarou mezi sídly; nejasná lokalita se nezaměňuje za nulovou vzdálenost. Hybrid se posuzuje podle místa dojíždění.
 
@@ -23,7 +24,7 @@ sudo bash deploy/update-aggregator.sh
 
 Vyžaduje skutečná práva správce k Dockeru. Pouhé schválení příkazu v asistentovi nenahradí heslo pro sudo. Zálohy jsou v ignorované složce `.backups/` s omezenými právy.
 
-Tabulka `job_interactions` pro viděné a označené nabídky vznikne automaticky při startu backendu. Nevyžaduje ruční úpravu existujících tabulek.
+Tabulky `job_interactions` (viděné a označené nabídky) a `job_notes` (poznámky) vzniknou automaticky při startu backendu. Nevyžaduje ruční úpravu existujících tabulek.
 
 Po nasazení zkontrolujte `/nastenka/api/v1/system/health`, přihlášení, nastavení a první dokončený sběr. Worker musí mít `WORKER_ENABLED=true`. Pro AI platí existující `AI_PROVIDER=openai`, `OPENAI_API_KEY` a `OPENAI_MODEL`; `AI_DAILY_MAX_CALLS` omezuje počet hodnocení (výchozí 50 denně). Bez připojené AI se nabídky normálně sbírají a UI upozorní, že AI hodnocení není dostupné. `AUTO_EVALUATE_ON_IMPORT` a původní IMAP/notifikace nový agregátor nepoužívá.
 

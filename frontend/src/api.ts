@@ -86,7 +86,8 @@ export const apiClient = {
   get: <T>(path: string, options?: Pick<RequestInit, "signal" | "cache">) => api<T>(path, options),
   post: <T>(path: string, body?: unknown) =>
     api<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
-  put: <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown, options?: Pick<RequestInit, "keepalive">) => api<T>(path, { ...options, method: "PUT", body: JSON.stringify(body) }),
+  delete: <T>(path: string, options?: Pick<RequestInit, "keepalive">) => api<T>(path, { ...options, method: "DELETE" }),
   patch: <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   upload: <T>(path: string, form: FormData) => api<T>(path, { method: "POST", body: form }),
 };

@@ -3,6 +3,7 @@ from app.models.audit import AuditEvent
 from app.models.evaluation import AiEvaluation
 from app.models.job import JobListing
 from app.models.job_interaction import JobInteraction
+from app.models.job_note import JobNote
 from app.models.profile import ProfessionalProfile
 from app.models.response import GeneratedResponse
 from app.models.feed_source import FeedSource
@@ -15,6 +16,7 @@ __all__ = [
     "User",
     "JobListing",
     "JobInteraction",
+    "JobNote",
     "ProfessionalProfile",
     "AiEvaluation",
     "Application",

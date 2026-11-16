@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { apiClient, errorText } from '../api';
-import type { InteractionState } from '../aggregate';
+import type { InteractionState, JobNote } from '../aggregate';
+import JobNoteEditor from '../components/JobNoteEditor';
 import { safeHref } from '../utils/safeUrl';
 
-type Detail = InteractionState & { title: string; company: string; location: string; url: string; raw_text: string };
+type Detail = InteractionState & { title: string; company: string; location: string; url: string; raw_text: string; note: JobNote };
 
 export default function JobDetailPage() {
   const { id } = useParams();
@@ -59,6 +60,7 @@ export default function JobDetailPage() {
       </div>
       {href && <a className="btn detail-original" href={href} target="_blank" rel="noopener noreferrer" onClick={() => { if (!job.seen_at) void change({ seen: true }); }} onAuxClick={e => { if (e.button === 1 && !job.seen_at) void change({ seen: true }); }}>Úplný inzerát na pracovním portálu ↗</a>}
       <p className="muted">Načtený přehled nabídky. Aktuálnost, podrobné požadavky a odpověď najdete na původním portálu.</p>
+      <JobNoteEditor key={job.id} jobId={job.id} title={job.title} initialNote={job.note || { text: '', updated_at: null }} expanded onSaved={note => setJob(current => current ? { ...current, note } : current)} />
       <div className="job-text">{job.raw_text}</div>
     </article> : !error && <p>Načítám nabídku…</p>}
   </div>;

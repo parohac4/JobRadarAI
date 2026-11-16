@@ -28,3 +28,7 @@ class SearchSettings(BaseModel):
 class InteractionUpdate(BaseModel):
     seen: bool | None = None
     marked: bool | None = None
+
+
+class NoteUpdate(BaseModel):
+    text: str = Field(max_length=10000)
