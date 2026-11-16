@@ -2,11 +2,12 @@ export type SearchSettings = {
   city: string; radius_km: number; keywords: string; ai_enabled: boolean; ai_preferences: string;
   sources: string[]; custom_feeds: { title: string; url: string; enabled: boolean }[];
   monitoring_enabled: boolean; interval_minutes: number; include_remote: boolean; include_unknown: boolean;
-  sort: 'match' | 'distance' | 'newest'; min_score: number;
+  sort: 'match' | 'distance' | 'newest' | 'oldest'; min_score: number;
 };
 export type Source = { id: string; name: string; description: string; url: string };
 export type SettingsResponse = { settings: SearchSettings; sources: Source[]; ai_available: boolean; worker_enabled: boolean; ai_daily_limit: number };
-export type Offer = { id: number; title: string; company: string; location: string; url: string; source: string;
+export type InteractionState = { id: number; seen_at: string | null; marked: boolean; marked_at: string | null };
+export type Offer = InteractionState & { title: string; company: string; location: string; url: string; source: string;
   imported_at: string; distance_km: number | null; remote: boolean; score: number | null;
   score_kind: 'ai' | 'keywords' | null; summary: string; preview: string };
 export type OfferList = { items: Offer[]; total: number; has_more: boolean };

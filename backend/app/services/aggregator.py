@@ -8,6 +8,7 @@ from sqlalchemy import or_, select, text
 from app.config import get_settings
 from app.models.evaluation import AiEvaluation
 from app.models.job import JobListing
+from app.models.job_interaction import JobInteraction
 from app.models.profile import ProfessionalProfile
 from app.models.sync import SyncRun
 from app.schemas.aggregator import SearchSettings
@@ -189,7 +190,7 @@ async def monitor(db, user, *, force=False):
     return {"status": run.status, "message": run.message, **run.details}
 
 
-async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query=""):
+async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query="", seen="all", marked_only=False):
     config = config_for(await profile_for(db, user_id))
     home = resolve_place(config.city)
     if not home:
@@ -203,8 +204,18 @@ async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query
     evs = (await db.execute(select(AiEvaluation).join(JobListing).where(JobListing.user_id == user_id,
             AiEvaluation.provider == score_version(config)).order_by(AiEvaluation.id))).scalars().all()
     by_job = {ev.job_listing_id: ev for ev in evs}
+    state_rows = await db.execute(select(JobInteraction.job_id, JobInteraction.seen_at, JobInteraction.marked,
+        JobInteraction.marked_at).where(JobInteraction.user_id == user_id))
+    states = {row.job_id: row for row in state_rows}
     rows = []
     for job in jobs:
+        state = states.get(job.id)
+        seen_at = state.seen_at if state else None
+        marked = state.marked if state else False
+        if (seen == "unseen" and seen_at is not None) or (seen == "seen" and seen_at is None):
+            continue
+        if marked_only and not marked:
+            continue
         enabled = [key for key in job_sources(job) if enabled_source(config, key)]
         if source:
             enabled = [key for key in enabled if ("custom" if key.startswith("custom:") else key) == source]
@@ -227,13 +238,25 @@ async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query
         rows.append({"id": job.id, "title": job.title, "company": job.company, "location": job.location,
             "url": job.url, "source": display_key, "imported_at": job.imported_at, "distance_km": distance,
             "remote": remote, "score": score, "score_kind": "ai" if ev else ("keywords" if kw_score is not None else None),
-            "summary": ev.summary if ev else "", "preview": plain_text(job.raw_text)[:300]})
+            "summary": ev.summary if ev else "", "preview": plain_text(job.raw_text)[:300],
+            "seen_at": seen_at, "marked": marked, "marked_at": state.marked_at if state else None})
     order = sort or config.sort
     if order == "distance":
         rows.sort(key=lambda j: (j["distance_km"] is None, j["distance_km"] if j["distance_km"] is not None else 1e9, -j["id"]))
     elif order == "match":
         rows.sort(key=lambda j: (j["score"] is None, -(j["score"] or 0), j["distance_km"] if j["distance_km"] is not None else 1e9, -j["id"]))
+    elif order == "oldest":
+        rows.sort(key=import_order)
+    else:
+        rows.sort(key=import_order, reverse=True)
     return {"items": rows[skip:skip + limit], "total": len(rows), "has_more": skip + limit < len(rows)}
+
+
+def import_order(row):
+    date = row["imported_at"]
+    if date.tzinfo is None:
+        date = date.replace(tzinfo=UTC)
+    return date.timestamp(), row["id"]
 
 
 def plain_text(raw):

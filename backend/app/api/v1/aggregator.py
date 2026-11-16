@@ -5,11 +5,13 @@ from app.config import get_settings
 from app.core.deps import get_current_user, require_write_access
 from app.database import AsyncSessionLocal, get_db
 from app.models.job import JobListing
-from app.schemas.aggregator import SearchSettings
+from app.models.job_interaction import JobInteraction
+from app.schemas.aggregator import InteractionUpdate, SearchSettings
 from app.services import aggregator as service
 from app.services.job_import import assert_public_url, UnsafeUrlError
 from app.services.places import resolve_place, suggestions
 from app.services.portal_import import CATALOG
+from app.services.job_interactions import update_interaction
 
 router = APIRouter()
 
@@ -69,10 +71,24 @@ async def sync(tasks: BackgroundTasks, _=Depends(require_write_access), user=Dep
 
 @router.get("/jobs")
 async def jobs(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),
-               sort: str | None = Query(None, pattern="^(newest|match|distance)$"),
+               sort: str | None = Query(None, pattern="^(newest|oldest|match|distance)$"),
                source: str | None = Query(None, max_length=30), q: str = Query("", max_length=300),
+               seen: str = Query("all", pattern="^(all|unseen|seen)$"), marked_only: bool = False,
                user=Depends(get_current_user), db=Depends(get_db)):
-    return await service.offers(db, user.id, skip=skip, limit=limit, sort=sort, source=source, query=q)
+    return await service.offers(db, user.id, skip=skip, limit=limit, sort=sort, source=source, query=q,
+                                seen=seen, marked_only=marked_only)
+
+
+@router.patch("/jobs/{job_id}/interaction")
+async def interaction(job_id: int, data: InteractionUpdate, _=Depends(require_write_access),
+                      user=Depends(get_current_user), db=Depends(get_db)):
+    owned = await db.scalar(select(JobListing.id).where(JobListing.id == job_id, JobListing.user_id == user.id))
+    if owned is None:
+        raise HTTPException(404, "Nabídka nenalezena")
+    try:
+        return await update_interaction(db, user.id, job_id, seen=data.seen, marked=data.marked)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}")
@@ -80,5 +96,8 @@ async def detail(job_id: int, user=Depends(get_current_user), db=Depends(get_db)
     job = (await db.execute(select(JobListing).where(JobListing.id == job_id, JobListing.user_id == user.id))).scalar_one_or_none()
     if not job:
         raise HTTPException(404, "Nabídka nenalezena")
+    state = (await db.execute(select(JobInteraction.seen_at, JobInteraction.marked, JobInteraction.marked_at)
+        .where(JobInteraction.user_id == user.id, JobInteraction.job_id == job_id))).one_or_none()
     return {"id": job.id, "title": job.title, "company": job.company, "location": job.location,
-            "url": job.url, "raw_text": service.plain_text(job.raw_text)}
+            "url": job.url, "raw_text": service.plain_text(job.raw_text), "seen_at": state.seen_at if state else None,
+            "marked": state.marked if state else False, "marked_at": state.marked_at if state else None}

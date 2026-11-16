@@ -21,5 +21,10 @@ class SearchSettings(BaseModel):
     interval_minutes: Literal[15, 30, 60, 180, 360, 720, 1440] = 30
     include_remote: bool = False
     include_unknown: bool = False
-    sort: Literal["match", "distance", "newest"] = "newest"
+    sort: Literal["match", "distance", "newest", "oldest"] = "newest"
     min_score: int = Field(0, ge=0, le=100)
+
+
+class InteractionUpdate(BaseModel):
+    seen: bool | None = None
+    marked: bool | None = None

@@ -171,3 +171,106 @@ async def test_partial_import_preserves_last_complete_success(store, monkeypatch
     assert jobs['last_success_at'] == previous_success
     assert jobs['checked_at'] != previous_success
     assert jobs['last_success_is_complete']
+
+async def test_seen_and_marked_are_persistent_and_independent(store):
+    from app.services.job_interactions import update_interaction
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    db, user, profile = store
+    job = add_job(db, user, 'Technik', 'Strakonice', 'https://www.jobs.cz/rpd/state/')
+    await db.commit()
+    marked = await update_interaction(db, user.id, job.id, marked=True)
+    assert marked['marked'] and marked['seen_at'] is None
+    viewed = await update_interaction(db, user.id, job.id, seen=True)
+    assert viewed['marked'] and viewed['seen_at'] is not None
+    again = await update_interaction(db, user.id, job.id, seen=True)
+    assert again['seen_at'] == viewed['seen_at']
+    assert again['marked_at'] == marked['marked_at']
+    async with async_sessionmaker(db.bind, expire_on_commit=False)() as fresh:
+        row = (await offers(fresh, user.id))['items'][0]
+        assert row['seen_at'] is not None and row['marked']
+    unseen = await update_interaction(db, user.id, job.id, seen=False)
+    assert unseen['seen_at'] is None and unseen['marked']
+    unmarked = await update_interaction(db, user.id, job.id, marked=False)
+    assert not unmarked['marked'] and unmarked['marked_at'] is None
+
+
+async def test_seen_filter_applies_before_pagination_and_combines_with_marked(store):
+    from app.models.job_interaction import JobInteraction
+    db, user, profile = store
+    jobs = [add_job(db, user, f'Technik {i}', 'Strakonice', f'https://www.jobs.cz/rpd/filter-{i}/') for i in range(55)]
+    await db.flush()
+    for job in jobs[:54]:
+        db.add(JobInteraction(user_id=user.id, job_id=job.id, seen_at=datetime.now(UTC), marked=True))
+    db.add(JobInteraction(user_id=user.id, job_id=jobs[-1].id, marked=True))
+    await db.commit()
+    result = await offers(db, user.id, seen='unseen', marked_only=True, limit=1)
+    assert result['total'] == 1 and not result['has_more']
+    assert result['items'][0]['id'] == jobs[-1].id
+    assert (await offers(db, user.id, seen='seen'))['total'] == 54
+    assert (await offers(db, user.id, marked_only=True))['total'] == 55
+
+
+async def test_oldest_newest_and_nearest_use_the_right_order(store):
+    from datetime import timedelta
+    db, user, profile = store
+    now = datetime.now(UTC)
+    newest = add_job(db, user, 'Nová', 'Volyně', 'https://www.jobs.cz/rpd/newest/')
+    nearest = add_job(db, user, 'Nejbližší', 'Strakonice', 'https://www.jobs.cz/rpd/nearest/')
+    oldest = add_job(db, user, 'Stará', 'Písek', 'https://www.jobs.cz/rpd/oldest/')
+    newest.imported_at = now
+    nearest.imported_at = now - timedelta(days=1)
+    oldest.imported_at = now - timedelta(days=2)
+    await db.commit()
+    assert [j['title'] for j in (await offers(db, user.id, sort='newest'))['items']] == ['Nová', 'Nejbližší', 'Stará']
+    assert [j['title'] for j in (await offers(db, user.id, sort='oldest'))['items']] == ['Stará', 'Nejbližší', 'Nová']
+    assert (await offers(db, user.id, sort='distance'))['items'][0]['id'] == nearest.id
+
+
+async def test_reimport_keeps_viewed_and_bookmarked_status(store):
+    from app.schemas.job import JobListingCreate
+    from app.services.jobs import create_job
+    from app.services.job_interactions import update_interaction
+    db, user, profile = store
+    payload = JobListingCreate(title='Technik', company='Firma', location='Strakonice',
+        url='https://www.jobs.cz/rpd/reimport/', raw_text='Technická práce', source='api')
+    original, duplicate = await create_job(db, user.id, payload)
+    await db.commit()
+    await update_interaction(db, user.id, original.id, seen=True, marked=True)
+    repeated, duplicate = await create_job(db, user.id, payload)
+    await db.commit()
+    assert duplicate is not None and repeated.id == original.id
+    result = await offers(db, user.id, seen='seen', marked_only=True)
+    assert result['total'] == 1 and result['items'][0]['marked']
+
+
+async def test_interaction_api_auth_ownership_and_filters(store):
+    db, user, profile = store
+    mine = add_job(db, user, 'Moje', 'Strakonice', 'https://www.jobs.cz/rpd/mine/')
+    other = User(email='other@example.test', hashed_password='unused', is_active=True)
+    db.add(other)
+    await db.flush()
+    theirs = add_job(db, other, 'Cizí', 'Strakonice', 'https://www.jobs.cz/rpd/theirs/')
+    await db.commit()
+    async def override_db(): yield db
+    app.dependency_overrides[get_db] = override_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            path = f'/api/v1/aggregate/jobs/{mine.id}/interaction'
+            assert (await client.patch(path, json={'seen': True})).status_code == 401
+            app.dependency_overrides[get_current_user] = lambda: user
+            app.dependency_overrides[require_write_access] = lambda: None
+            assert (await client.patch(path, json={})).status_code == 400
+            assert (await client.patch(f'/api/v1/aggregate/jobs/{theirs.id}/interaction', json={'marked': True})).status_code == 404
+            assert (await client.patch(path, json={'seen': True, 'marked': True})).status_code == 200
+            detail = (await client.get(f'/api/v1/aggregate/jobs/{mine.id}')).json()
+            assert detail['seen_at'] and detail['marked']
+            listing = await client.get('/api/v1/aggregate/jobs?seen=unseen&marked_only=true&sort=oldest')
+            assert listing.status_code == 200 and listing.json()['total'] == 0
+            listing = await client.get('/api/v1/aggregate/jobs?seen=seen&marked_only=true&sort=oldest')
+            assert listing.json()['total'] == 1
+            assert (await client.patch(path, json={'seen': False})).json()['marked']
+            assert (await client.get('/api/v1/aggregate/jobs?seen=unseen&marked_only=true')).json()['total'] == 1
+            config = (await client.get('/api/v1/aggregate/settings')).json()['settings']
+            config['sort'] = 'oldest'
+            assert (await client.put('/api/v1/aggregate/settings', json=config)).status_code == 200
+    finally: app.dependency_overrides.clear()

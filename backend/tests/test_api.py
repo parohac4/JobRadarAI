@@ -78,3 +78,37 @@ async def test_login_rate_limit(client: AsyncClient):
         codes.append(r.status_code)
     assert codes[-1] == 429
     login_limiter.reset(f"email:{email}", "ip:127.0.0.1")
+
+
+async def test_interaction_persists_in_postgresql(client: AsyncClient):
+    from sqlalchemy import delete, select
+    from app.database import AsyncSessionLocal
+    from app.models.job import JobListing
+    from app.models.user import User
+    from app.schemas.job import JobListingCreate
+    from app.services.jobs import create_job
+
+    auth = await _token(client)
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(select(User).where(User.email == os.environ['ADMIN_EMAIL']))).scalar_one()
+        job, _ = await create_job(db, user.id, JobListingCreate(
+            title=f'Test označení {uuid.uuid4().hex}', company='Test', location='Strakonice',
+            url=f'https://www.jobs.cz/rpd/test-{uuid.uuid4().hex}/', raw_text='Testovací nabídka', source='api'))
+        await db.commit()
+        job_id = job.id
+    try:
+        path = f'/api/v1/aggregate/jobs/{job_id}/interaction'
+        marked = await client.patch(path, headers=auth, json={'marked': True})
+        assert marked.status_code == 200 and marked.json()['marked']
+        viewed = await client.patch(path, headers=auth, json={'seen': True})
+        assert viewed.status_code == 200 and viewed.json()['seen_at'] and viewed.json()['marked']
+        again = await client.patch(path, headers=auth, json={'seen': True})
+        assert again.json()['seen_at'] == viewed.json()['seen_at']
+        detail = await client.get(f'/api/v1/aggregate/jobs/{job_id}', headers=auth)
+        assert detail.json()['marked'] and detail.json()['seen_at']
+        unseen = await client.patch(path, headers=auth, json={'seen': False})
+        assert unseen.json()['seen_at'] is None and unseen.json()['marked']
+    finally:
+        async with AsyncSessionLocal() as db:
+            await db.execute(delete(JobListing).where(JobListing.id == job_id))
+            await db.commit()
