@@ -19,6 +19,7 @@ from app.services.places import resolve_place, location_distance
 from app.services.geo import normalize_place
 from app.services.portal_import import CATALOG, fetch_source, source_id, source_error
 from app.services.post_import import ai_calls_today
+from app.services.portal_urls import original_offer_url
 
 logger = logging.getLogger("jobradar.aggregator")
 
@@ -239,7 +240,7 @@ async def offers(db, user_id, *, skip=0, limit=50, sort=None, source=None, query
         if config.min_score and (score is None or score < config.min_score):
             continue
         rows.append({"id": job.id, "title": job.title, "company": job.company, "location": job.location,
-            "url": job.url, "source": display_key, "imported_at": job.imported_at, "distance_km": distance,
+            "url": original_offer_url(job.url), "source": display_key, "imported_at": job.imported_at, "distance_km": distance,
             "remote": remote, "score": score, "score_kind": "ai" if ev else ("keywords" if kw_score is not None else None),
             "summary": ev.summary if ev else "", "preview": plain_text(job.raw_text)[:300],
             "seen_at": seen_at, "marked": marked, "marked_at": state.marked_at if state else None,

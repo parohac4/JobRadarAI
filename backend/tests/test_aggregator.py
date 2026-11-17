@@ -57,7 +57,7 @@ def test_portal_parsers_and_canonical_urls():
     body = '''<article class="SearchResultCard"><h2><a data-jobad-id="123" href="/rpd/123/?tracking=1">Technik</a></h2>
     <li class="SearchResultCard__footerItem"><span translate="no">Firma</span></li><li data-test="serp-locality">Volyně</li></article>'''
     j = parse_portal(body, 'https://www.jobs.cz/prace/strakonice/')[0]
-    assert (j.title, j.company, j.location, j.url) == ('Technik', 'Firma', 'Volyně', 'https://www.jobs.cz/rpd/123/')
+    assert (j.title, j.company, j.location, j.url) == ('Technik', 'Firma', 'Volyně', 'https://www.jobs.cz/rpd/123/?tracking=1')
     body = '''<article><a data-testid="advert-link" href="/nabidka/abc/">Prodejce</a>
     <li><span class="accessibility-hidden">Lokalita:</span><span>Strakonice I</span></li>
     <li><span class="accessibility-hidden">Název firmy:</span><span>Obchod</span></li></article>'''
@@ -328,3 +328,53 @@ async def test_note_survives_reimport(store):
     assert duplicate is not None and repeated.id == job.id
     result = await offers(db, user.id)
     assert result['total'] == 1 and result['items'][0]['note']['text'] == 'Kontakt: pan Novák'
+
+async def test_existing_broken_original_is_repaired_in_list_detail_and_reimport(store):
+    from app.schemas.job import JobListingCreate
+    from app.services.jobs import create_job
+    from app.services import dedup
+    from app.services.job_interactions import update_interaction
+    from app.services.job_notes import save_note
+    db, user, profile = store
+    bad = 'https://www.jobs.cz/nabidka/1d9d8c01-ca63-4989-822d-09b5d786e141/'
+    good = bad.replace('www.jobs.cz', 'beta.jobs.cz')
+    job = add_job(db, user, 'Obchodník', 'Strakonice', bad)
+    job.content_hash = dedup.content_hash(job.title, job.company, job.location)
+    job.title_company_hash = dedup.title_company_hash(job.title, job.company)
+    job.url_hash = dedup.url_hash(bad)
+    await db.commit()
+    await update_interaction(db, user.id, job.id, seen=True, marked=True)
+    await save_note(db, user.id, job.id, 'Domluvit pohovor')
+    assert (await offers(db, user.id))['items'][0]['url'] == good
+    async def override_db(): yield db
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            detail = (await client.get(f'/api/v1/aggregate/jobs/{job.id}')).json()
+            assert detail['url'] == good and detail['marked'] and detail['seen_at']
+            assert detail['note']['text'] == 'Domluvit pohovor'
+    finally: app.dependency_overrides.clear()
+    again, duplicate = await create_job(db, user.id, JobListingCreate(
+        title=job.title, company=job.company, location=job.location, url=good, raw_text=job.raw_text, source='api'))
+    await db.commit()
+    assert duplicate is not None and again.id == job.id
+    assert again.url == good and again.url_hash == dedup.url_hash(good)
+    assert (await offers(db, user.id))['items'][0]['note']['text'] == 'Domluvit pohovor'
+
+async def test_reimport_restores_employer_advertisement_query(store):
+    from app.schemas.job import JobListingCreate
+    from app.services.jobs import create_job
+    from app.services import dedup
+    db, user, profile = store
+    old_url = 'https://firma.jobs.cz/detail-pozice'
+    fixed_url = old_url + '?r=detail&id=2001499885'
+    job = add_job(db, user, 'Makléř', 'Strakonice', old_url)
+    job.content_hash = dedup.content_hash(job.title, job.company, job.location)
+    job.url_hash = dedup.url_hash(old_url)
+    await db.commit()
+    repeated, duplicate = await create_job(db, user.id, JobListingCreate(
+        title=job.title, company=job.company, location=job.location, url=fixed_url, raw_text=job.raw_text, source='api'))
+    await db.commit()
+    assert duplicate is not None and repeated.id == job.id
+    assert repeated.url == fixed_url and repeated.url_hash == dedup.url_hash(fixed_url)

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,7 @@ from app.models.job import JobListing
 from app.schemas.job import JobListingCreate
 from app.services import dedup
 from app.services.geo import job_distance
+from app.services.portal_urls import original_offer_url
 
 
 async def create_job(
@@ -16,6 +18,7 @@ async def create_job(
     user_id: int,
     data: JobListingCreate,
 ) -> tuple[JobListing, JobListing | None]:
+    data = data.model_copy(update={"url": original_offer_url(data.url)})
     dup = await dedup.find_duplicate(
         db,
         user_id,
@@ -25,6 +28,17 @@ async def create_job(
         url=data.url,
     )
     if dup:
+        repaired_url = original_offer_url(dup.url)
+        previous = urlsplit(repaired_url)
+        current = urlsplit(data.url)
+        if (current.query and not previous.query and current.hostname == previous.hostname
+                and current.path.rstrip("/") == previous.path.rstrip("/")):
+            # Older imports removed all parameters, including the advert ID
+            # on employer /detail-pozice pages. Restore the freshly read link.
+            repaired_url = data.url
+        if repaired_url != dup.url:
+            dup.url = repaired_url
+            dup.url_hash = dedup.url_hash(repaired_url)
         return dup, dup
     job = JobListing(
         user_id=user_id,

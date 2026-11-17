@@ -14,6 +14,7 @@ from app.services.places import resolve_place, suggestions
 from app.services.portal_import import CATALOG
 from app.services.job_interactions import update_interaction
 from app.services.job_notes import save_note
+from app.services.portal_urls import original_offer_url
 
 router = APIRouter()
 
@@ -103,7 +104,7 @@ async def detail(job_id: int, user=Depends(get_current_user), db=Depends(get_db)
     note = (await db.execute(select(JobNote.text, JobNote.updated_at)
         .where(JobNote.user_id == user.id, JobNote.job_id == job_id))).one_or_none()
     return {"id": job.id, "title": job.title, "company": job.company, "location": job.location,
-            "url": job.url, "raw_text": service.plain_text(job.raw_text), "seen_at": state.seen_at if state else None,
+            "url": original_offer_url(job.url), "raw_text": service.plain_text(job.raw_text), "seen_at": state.seen_at if state else None,
             "marked": state.marked if state else False, "marked_at": state.marked_at if state else None,
             "note": {"text": note.text, "updated_at": note.updated_at} if note else {"text": "", "updated_at": None}}
 

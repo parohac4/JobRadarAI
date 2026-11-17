@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import time
-from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import urlencode, urljoin, urlsplit
 
 import feedparser
 import httpx
@@ -13,6 +13,7 @@ from app.schemas.job import JobListingCreate
 from app.services.rss_import import _fetch_feed, _entry_to_job
 from app.services.sitprace_import import build_search_url, fetch_sitprace, _job_text
 from app.services.places import nearby_places, slug
+from app.services.portal_urls import original_offer_url
 
 logger = logging.getLogger("jobradar.portals")
 
@@ -123,6 +124,17 @@ def source_id(url: str) -> str:
 
 def parse_portal(body: str, url: str) -> list[JobListingCreate]:
     soup = BeautifulSoup(body, "html.parser")
+    # A legacy listing URL can redirect to beta.jobs.cz, where relative links
+    # belong to a different host. The listing advertises its effective base.
+    base = url
+    canonical_tag = soup.select_one('link[rel="canonical"][href]')
+    if canonical_tag:
+        candidate = urljoin(url, canonical_tag["href"])
+        parsed_base = urlsplit(candidate)
+        if (parsed_base.scheme in ("https", "http")
+                and parsed_base.hostname in ("jobs.cz", "www.jobs.cz", "beta.jobs.cz", "prace.cz", "www.prace.cz")
+                and source_id(candidate) == source_id(url)):
+            base = candidate
     items = []
     for a in soup.select('a[data-jobad-id], a[data-testid="advert-link"]'):
         card = a.find_parent("article")
@@ -141,8 +153,7 @@ def parse_portal(body: str, url: str) -> list[JobListingCreate]:
                         location = value.get_text(" ", strip=True)
                     else:
                         company_text = value.get_text(" ", strip=True)
-        link = urlsplit(urljoin(url, a["href"]))
-        canonical = urlunsplit((link.scheme, link.netloc, link.path, "", ""))
+        canonical = original_offer_url(urljoin(base, a["href"]))
         if source_id(canonical) != source_id(url):
             continue
         items.append(JobListingCreate(title=a.get_text(" ", strip=True)[:500], company=company_text[:300],
